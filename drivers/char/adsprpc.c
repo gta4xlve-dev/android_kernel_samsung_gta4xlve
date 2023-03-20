@@ -49,6 +49,8 @@
 #include <linux/pm_qos.h>
 #include <linux/stat.h>
 
+#include <linux/sec_debug.h>
+
 #define TZ_PIL_PROTECT_MEM_SUBSYS_ID 0x0C
 #define TZ_PIL_CLEAR_PROTECT_MEM_SUBSYS_ID 0x0D
 #define TZ_PIL_AUTH_QDSP6_PROC 1
@@ -412,6 +414,8 @@ struct fastrpc_file {
 	int wake_enable;
 	/* To indicate attempt has been made to allocate memory for debug_buf */
 	int debug_buf_alloced_attempted;
+	/* Flag to indicate dynamic process creation status */
+	bool in_process_create;
 };
 
 static struct fastrpc_apps gfa;
@@ -1974,10 +1978,12 @@ static inline void fastrpc_pm_awake(int fl_wake_enable, bool *pm_awake_voted,
 
 	if (!fl_wake_enable || *pm_awake_voted)
 		return;
+
 	if (channel_type == SECURE_CHANNEL)
 		__pm_stay_awake(me->wake_source_secure);
 	else if (channel_type == NON_SECURE_CHANNEL)
 		__pm_stay_awake(me->wake_source);
+
 	*pm_awake_voted = true;
 }
 
@@ -1987,10 +1993,12 @@ static inline void fastrpc_pm_relax(bool *pm_awake_voted, int channel_type)
 
 	if (!(*pm_awake_voted))
 		return;
+
 	if (channel_type == SECURE_CHANNEL)
 		__pm_relax(me->wake_source_secure);
 	else if (channel_type == NON_SECURE_CHANNEL)
 		__pm_relax(me->wake_source);
+
 	*pm_awake_voted = false;
 }
 
@@ -2011,11 +2019,14 @@ static int fastrpc_internal_invoke(struct fastrpc_file *fl, uint32_t mode,
 		err = -ECHRNG;
 		goto bail;
 	}
+
 	VERIFY(err, fl->sctx != NULL);
+
 	if (err) {
 		err = -EBADR;
 		goto bail;
 	}
+
 	perf_counter = getperfcounter(fl, PERF_COUNT);
 	pm_awake_voted = false;
 	if (interrupted != -ERESTARTSYS)
@@ -2188,6 +2199,7 @@ static int fastrpc_init_process(struct fastrpc_file *fl,
 				__func__);
 			return err;
 		}
+
 		ra[0].buf.pv = (void *)&tgid;
 		ra[0].buf.len = sizeof(tgid);
 		ioctl.inv.handle = FASTRPC_STATIC_HANDLE_PROCESS_GROUP;
@@ -2221,6 +2233,15 @@ static int fastrpc_init_process(struct fastrpc_file *fl,
 			int siglen;
 		} inbuf;
 
+		spin_lock(&fl->hlock);
+		if (fl->in_process_create) {
+			err = -EALREADY;
+			pr_err("Already in create init process\n");
+			spin_unlock(&fl->hlock);
+			return err;
+		}
+		fl->in_process_create = true;
+		spin_unlock(&fl->hlock);
 		inbuf.pgid = fl->tgid;
 		inbuf.namelen = strlen(current->comm) + 1;
 		inbuf.filelen = init->filelen;
@@ -2423,6 +2444,11 @@ bail:
 		mutex_lock(&fl->map_mutex);
 		fastrpc_mmap_free(file, 0);
 		mutex_unlock(&fl->map_mutex);
+	}
+	if (init->flags == FASTRPC_INIT_CREATE) {
+		spin_lock(&fl->hlock);
+		fl->in_process_create = false;
+		spin_unlock(&fl->hlock);
 	}
 	return err;
 }
@@ -3221,6 +3247,7 @@ static int fastrpc_file_free(struct fastrpc_file *fl)
 	hlist_del_init(&fl->hn);
 	spin_unlock(&fl->apps->hlock);
 	kfree(fl->debug_buf);
+	fl->debug_buf_alloced_attempted = 0;
 
 	if (!fl->sctx) {
 		kfree(fl);
@@ -3228,6 +3255,7 @@ static int fastrpc_file_free(struct fastrpc_file *fl)
 	}
 	spin_lock(&fl->hlock);
 	fl->file_close = 1;
+	fl->in_process_create = false;
 	spin_unlock(&fl->hlock);
 	if (!IS_ERR_OR_NULL(fl->init_mem))
 		fastrpc_buf_free(fl->init_mem, 0);
@@ -3308,6 +3336,8 @@ static ssize_t fastrpc_debugfs_read(struct file *filp, char __user *buffer,
 	char *fileinfo = NULL;
 	char single_line[UL_SIZE] = "----------------";
 	char title[UL_SIZE] = "=========================";
+	single_line[UL_SIZE-1]='\0';
+	title[UL_SIZE-1]='\0';
 
 	fileinfo = kzalloc(DEBUGFS_SIZE, GFP_KERNEL);
 	if (!fileinfo)
@@ -3464,6 +3494,7 @@ static ssize_t fastrpc_debugfs_read(struct file *filp, char __user *buffer,
 				map->secure, map->attr);
 		}
 		mutex_unlock(&fl->map_mutex);
+
 		len += scnprintf(fileinfo + len, DEBUGFS_SIZE - len,
 			"\n======%s %s %s======\n", title,
 			" LIST OF BUFS ", title);
@@ -3615,6 +3646,7 @@ static int fastrpc_device_open(struct inode *inode, struct file *filp)
 	fl->cid = -1;
 	fl->dev_minor = dev_minor;
 	fl->init_mem = NULL;
+	fl->in_process_create = false;
 	memset(&fl->perf, 0, sizeof(fl->perf));
 	fl->qos_request = 0;
 	fl->dsp_proc_init = 0;
@@ -3650,6 +3682,7 @@ static int fastrpc_set_process_info(struct fastrpc_file *fl)
 		}
 		fl->debug_buf_alloced_attempted = 1;
 		spin_unlock(&fl->hlock);
+
 		fl->debug_buf = kzalloc(buf_size, GFP_KERNEL);
 		if (!fl->debug_buf) {
 			err = -ENOMEM;
@@ -3664,6 +3697,7 @@ static int fastrpc_set_process_info(struct fastrpc_file *fl)
 				cur_comm, __func__, fl->debug_buf);
 			fl->debugfs_file = NULL;
 			kfree(fl->debug_buf);
+			fl->debug_buf_alloced_attempted = 0;
 			fl->debug_buf = NULL;
 		}
 	}
@@ -3786,7 +3820,7 @@ static int fastrpc_setmode(unsigned long ioctl_param,
 		fl->tgid |= (1 << SESSION_ID_INDEX);
 		break;
 	default:
-		err = -ENOTTY;
+		err = -EBADRQC;
 		break;
 	}
 	return err;
@@ -4511,9 +4545,27 @@ static void configure_secure_channels(uint32_t secure_domains)
 		int secure = (secure_domains >> ii) & 0x01;
 
 		me->channel[ii].secure = secure;
+		printk("adsprpc: domain %d configured as secure %d\n", ii, secure);
 	}
 }
 
+#define CDSP_SIGNOFF_BLOCK 0x2377
+static unsigned int signoff_val;
+static int __init signoff_setup(char *str)
+{
+	get_option(&str, &signoff_val);
+	return 0;
+}
+early_param("signoff", signoff_setup);
+
+unsigned int is_signoff_block(void)
+{
+	pr_err("is_signoff_block : 0x%08x\n", signoff_val);
+	if (signoff_val == CDSP_SIGNOFF_BLOCK)
+			return 1;
+
+	return 0;
+}
 
 static int fastrpc_probe(struct platform_device *pdev)
 {
@@ -4537,7 +4589,7 @@ static int fastrpc_probe(struct platform_device *pdev)
 		of_property_read_u32(dev->of_node, "qcom,rpc-latency-us",
 			&me->latency);
 		if (of_get_property(dev->of_node,
-			"qcom,secure-domains", NULL) != NULL) {
+			"qcom,secure-domains", NULL) != NULL && is_signoff_block()) {
 			VERIFY(err, !of_property_read_u32(dev->of_node,
 					  "qcom,secure-domains",
 			      &secure_domains));

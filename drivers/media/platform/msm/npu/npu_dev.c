@@ -1555,6 +1555,57 @@ static int npu_exec_network_v2(struct npu_client *client,
 	return ret;
 }
 
+static int npu_process_kevent(struct npu_kevent *kevt)
+{
+	int ret = 0;
+
+	switch (kevt->evt.type) {
+	case MSM_NPU_EVENT_TYPE_EXEC_V2_DONE:
+		ret = copy_to_user((void __user *)kevt->reserved[1],
+			(void *)kevt->reserved[0],
+			kevt->evt.u.exec_v2_done.stats_buf_size);
+		if (ret) {
+			pr_err("fail to copy to user\n");
+			kevt->evt.u.exec_v2_done.stats_buf_size = 0;
+			ret = -EFAULT;
+		}
+		break;
+	default:
+		break;
+	}
+
+	return ret;
+}
+
+static int npu_receive_event(struct npu_client *client,
+	unsigned long arg)
+{
+	void __user *argp = (void __user *)arg;
+	struct npu_kevent *kevt;
+	int ret = 0;
+
+	mutex_lock(&client->list_lock);
+	if (list_empty(&client->evt_list)) {
+		pr_err("event list is empty\n");
+		ret = -EINVAL;
+	} else {
+		kevt = list_first_entry(&client->evt_list,
+			struct npu_kevent, list);
+		list_del(&kevt->list);
+		npu_process_kevent(kevt);
+		ret = copy_to_user(argp, &kevt->evt,
+			sizeof(struct msm_npu_event));
+		if (ret) {
+			pr_err("fail to copy to user\n");
+			ret = -EFAULT;
+		}
+		kfree(kevt);
+	}
+	mutex_unlock(&client->list_lock);
+
+	return ret;
+}
+
 static int npu_set_fw_state(struct npu_client *client, uint32_t enable)
 {
 	struct npu_device *npu_dev = client->npu_dev;

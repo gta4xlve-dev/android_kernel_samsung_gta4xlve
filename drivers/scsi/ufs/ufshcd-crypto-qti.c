@@ -113,7 +113,6 @@ static int ufshcd_crypto_qti_keyslot_program(struct keyslot_manager *ksm,
 		pr_err("%s: failed with error %d\n", __func__, err);
 
 	ufshcd_release(hba, false);
-
 out:
 	if (!hba->pm_op_in_progress)
 		pm_runtime_put_sync(hba->dev);
