@@ -79,29 +79,28 @@ static inline bool keyslot_manager_is_passthrough(struct keyslot_manager *ksm)
 {
 	return ksm->num_slots == 0;
 }
-
 #ifdef CONFIG_PM
 static inline void keyslot_manager_set_dev(struct keyslot_manager *ksm,
-					   struct device *dev)
+										  struct device *dev)
 {
-	ksm->dev = dev;
+	  ksm->dev = dev;
 }
 
 /* If there's an underlying device and it's suspended, resume it. */
 static inline void keyslot_manager_pm_get(struct keyslot_manager *ksm)
 {
-	if (ksm->dev)
-		pm_runtime_get_sync(ksm->dev);
+		if (ksm->dev)
+				pm_runtime_get_sync(ksm->dev);
 }
 
 static inline void keyslot_manager_pm_put(struct keyslot_manager *ksm)
 {
-	if (ksm->dev)
-		pm_runtime_put_sync(ksm->dev);
+		if (ksm->dev)
+				pm_runtime_put_sync(ksm->dev);
 }
 #else /* CONFIG_PM */
 static inline void keyslot_manager_set_dev(struct keyslot_manager *ksm,
-					   struct device *dev)
+										  struct device *dev)
 {
 }
 
@@ -467,7 +466,6 @@ int keyslot_manager_evict_key(struct keyslot_manager *ksm,
 	}
 
 	keyslot_manager_hw_enter(ksm);
-
 	slot = find_keyslot(ksm, key);
 	if (slot < 0) {
 		err = slot;
@@ -506,7 +504,6 @@ void keyslot_manager_reprogram_all_keys(struct keyslot_manager *ksm)
 
 	if (WARN_ON(keyslot_manager_is_passthrough(ksm)))
 		return;
-
 	/* This is for device initialization, so don't resume the device */
 	down_write(&ksm->lock);
 	for (slot = 0; slot < ksm->num_slots; slot++) {
