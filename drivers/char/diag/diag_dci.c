@@ -1745,6 +1745,7 @@ static int diag_send_dci_pkt_remote(unsigned char *data, int len, int tag,
 		spin_unlock_irqrestore(&driver->dci_mempool_lock, flags);
 		return -EAGAIN;
 	}
+
 	write_len += len;
 	*(buf + write_len) = CONTROL_CHAR; /* End Terminator */
 	write_len += sizeof(uint8_t);
