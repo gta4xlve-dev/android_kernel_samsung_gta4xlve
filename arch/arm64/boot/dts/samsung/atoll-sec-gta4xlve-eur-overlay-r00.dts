@@ -4300,7 +4300,7 @@
 				hall_ic,debounce-interval = <0x32>;
 
 				hall {
-					event = <0x15>;
+					event = <0x00>;
 					gpios = <0xffffffff 0x5d 0x1>;
 					phandle = <0xb1>;
 				};
