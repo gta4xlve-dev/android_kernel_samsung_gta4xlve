@@ -242,7 +242,7 @@
 
 		hall: hall {
 			name = "hall";
-			event = <0x15>;
+			event = <0x0>;
 			gpios = <&tlmm 93 0x1>;
 		};
 
