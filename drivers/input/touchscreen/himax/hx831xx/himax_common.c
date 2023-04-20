@@ -778,6 +778,12 @@ int himax_input_register(struct himax_ts_data *ts, struct input_dev *input_dev, 
 		return -ENODEV;
 	}
 
+#if defined(CONFIG_DRM)
+	ret = himax_fb_register(ts);
+	if (ret)
+		return ret;
+#endif
+
 	set_bit(EV_SYN, input_dev->evbit);
 	set_bit(EV_ABS, input_dev->evbit);
 	set_bit(EV_KEY, input_dev->evbit);
@@ -2701,6 +2707,51 @@ UPDATE_FW:
 }
 #endif
 
+#if defined(CONFIG_DRM)
+int drm_notifier_callback(struct notifier_block *self,
+                unsigned long event, void *data)
+{
+    struct msm_drm_notifier *evdata = data;
+    int *blank;
+    struct himax_ts_data *ts =
+        container_of(self, struct himax_ts_data, fb_notif);
+
+    if (!evdata || (evdata->id != 0))
+        return 0;
+
+    D("DRM  %s\n", __func__);
+
+    blank = evdata->data;
+    switch (*blank) {
+        case MSM_DRM_BLANK_POWERDOWN:
+            if (!ts->initialized)
+                return -ECANCELED;
+            D("DRM powerdown");
+            himax_chip_common_suspend(ts);
+            break;
+        case MSM_DRM_BLANK_UNBLANK:
+            D("DRM unblank");
+            himax_chip_common_resume(ts);
+            break;
+    }
+
+    return 0;
+}
+
+int himax_fb_register(struct himax_ts_data *ts)
+{
+    int ret = 0;
+
+    D(" %s in\n", __func__);
+    ts->fb_notif.notifier_call = drm_notifier_callback;
+    ret = msm_drm_register_client(&ts->fb_notif);
+    if (ret)
+        E(" Unable to register fb_notifier: %d\n", ret);
+
+    return ret;
+}
+#endif
+
 #ifndef HX_ZERO_FLASH
 static int hx_chk_flash_sts(uint32_t size)
 {
@@ -3472,11 +3523,6 @@ int himax_chip_common_resume(struct himax_ts_data *ts)
 		usleep_range(5000, 5000);
 	}
 #endif
-
-	if (ts->SMWP_enable)
-		himax_ctrl_lcd_regulators(ts, false);
-	else 
-		himax_pinctrl_configure(ts, true);
 
 	atomic_set(&ts->suspend_mode, HIMAX_STATE_POWER_ON);
 
