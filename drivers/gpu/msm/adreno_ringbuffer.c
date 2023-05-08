@@ -1064,8 +1064,8 @@ int adreno_ringbuffer_submitcmd(struct adreno_device *adreno_dev,
 		user_profiling = true;
 
 		/*
-		 * User side profiling uses two IB1s, one before with 4 dwords
-		 * per INDIRECT_BUFFER_PFE call
+		  * User side profiling uses two IB1s, one before with 4 dwords
+		  * per INDIRECT_BUFFER_PFE call
 		 */
 		dwords += 8;
 
