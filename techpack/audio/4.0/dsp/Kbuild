@@ -138,6 +138,10 @@ ifdef CONFIG_XT_LOGGING
 	Q6_OBJS += sp_params.o
 endif
 
+ifdef CONFIG_SEC_SND_ADAPTATION
+	Q6_OBJS += q6audio_adaptation.o
+endif
+
 ifdef CONFIG_WCD9XXX_CODEC_CORE
 	Q6_OBJS += audio_slimslave.o
 endif
@@ -251,3 +255,6 @@ q6_pdr_dlkm-y := $(QDSP6_PDR_OBJS)
 
 obj-$(CONFIG_MSM_QDSP6_NOTIFIER) += q6_notifier_dlkm.o
 q6_notifier_dlkm-y := $(QDSP6_NOTIFIER_OBJS)
+
+# inject some build related information
+DEFINES += -DBUILD_TIMESTAMP=\"$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')\"

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
  */
 #include <linux/slab.h>
 #include <linux/fs.h>
@@ -1062,7 +1062,6 @@ int __init cal_utils_init(void)
 	mutex_init(&cal_lock);
 	return 0;
 }
-
 /**
  * cal_utils_is_cal_stale
  *
