@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
  *
  * This software is licensed under the terms of the GNU General Public
@@ -257,6 +257,13 @@ static int is_adsp_raise_event(uint32_t cmd)
 	}
 	return -EINVAL;
 }
+
+#ifdef CONFIG_SEC_SND_ADAPTATION
+struct audio_session *q6asm_get_audio_session(void)
+{
+	return session;
+}
+#endif /* CONFIG_SEC_SND_ADAPTATION */
 
 #ifdef CONFIG_DEBUG_FS
 #define OUT_BUFFER_SIZE 56
@@ -3153,7 +3160,7 @@ static int __q6asm_open_read(struct audio_client *ac,
 		pr_err("%s: AC APR handle NULL\n", __func__);
 		return -EINVAL;
 	}
-	pr_debug("%s: session[%d]\n", __func__, ac->session);
+	pr_info("%s: session[%d]\n", __func__, ac->session);
 
 	q6asm_add_hdr(ac, &open.hdr, sizeof(open), TRUE);
 	atomic_set(&ac->cmd_state, -1);
@@ -3470,7 +3477,7 @@ static int __q6asm_open_write(struct audio_client *ac, uint32_t format,
 		return -EINVAL;
 	}
 
-	dev_vdbg(ac->dev, "%s: session[%d] wr_format[0x%x]\n",
+	pr_info("%s: session[%d] wr_format[0x%x]\n",
 		__func__, ac->session, format);
 
 	q6asm_stream_add_hdr(ac, &open.hdr, sizeof(open), TRUE, stream_id);
@@ -8246,7 +8253,6 @@ int q6asm_memory_map(struct audio_client *ac, phys_addr_t buf_add, int dir,
 	if (mmap_region_cmd == NULL) {
 		rc = -EINVAL;
 		kfree(buffer_node);
-		buffer_node = NULL;
 		return rc;
 	}
 	mmap_regions = (struct avs_cmd_shared_mem_map_regions *)
@@ -8276,7 +8282,6 @@ int q6asm_memory_map(struct audio_client *ac, phys_addr_t buf_add, int dir,
 					mmap_regions->hdr.opcode, rc);
 		rc = -EINVAL;
 		kfree(buffer_node);
-		buffer_node = NULL;
 		goto fail_cmd;
 	}
 
@@ -8288,7 +8293,6 @@ int q6asm_memory_map(struct audio_client *ac, phys_addr_t buf_add, int dir,
 		pr_err("%s: timeout. waited for memory_map\n", __func__);
 		rc = -ETIMEDOUT;
 		kfree(buffer_node);
-		buffer_node = NULL;
 		goto fail_cmd;
 	}
 	if (atomic_read(&ac->mem_state) > 0) {
@@ -8298,7 +8302,6 @@ int q6asm_memory_map(struct audio_client *ac, phys_addr_t buf_add, int dir,
 		rc = adsp_err_get_lnx_err_code(
 			atomic_read(&ac->mem_state));
 		kfree(buffer_node);
-		buffer_node = NULL;
 		goto fail_cmd;
 	}
 	buffer_node->buf_phys_addr = buf_add;
@@ -8309,7 +8312,6 @@ int q6asm_memory_map(struct audio_client *ac, phys_addr_t buf_add, int dir,
 
 fail_cmd:
 	kfree(mmap_region_cmd);
-	mmap_region_cmd = NULL;
 	return rc;
 }
 EXPORT_SYMBOL(q6asm_memory_map);
@@ -8404,7 +8406,6 @@ fail_cmd:
 		if (buf_node->buf_phys_addr == buf_add) {
 			list_del(&buf_node->list);
 			kfree(buf_node);
-			buf_node = NULL;
 			break;
 		}
 	}
@@ -8487,7 +8488,6 @@ static int q6asm_memory_map_regions(struct audio_client *ac, int dir,
 	if (mmap_region_cmd == NULL) {
 		rc = -EINVAL;
 		kfree(buffer_node);
-		buffer_node = NULL;
 		return rc;
 	}
 	mmap_regions = (struct avs_cmd_shared_mem_map_regions *)
@@ -8524,7 +8524,6 @@ static int q6asm_memory_map_regions(struct audio_client *ac, int dir,
 					mmap_regions->hdr.opcode, rc);
 		rc = -EINVAL;
 		kfree(buffer_node);
-		buffer_node = NULL;
 		goto fail_cmd;
 	}
 
@@ -8536,7 +8535,6 @@ static int q6asm_memory_map_regions(struct audio_client *ac, int dir,
 		pr_err("%s: timeout. waited for memory_map\n", __func__);
 		rc = -ETIMEDOUT;
 		kfree(buffer_node);
-		buffer_node = NULL;
 		goto fail_cmd;
 	}
 	if (atomic_read(&ac->mem_state) > 0) {
@@ -8546,7 +8544,6 @@ static int q6asm_memory_map_regions(struct audio_client *ac, int dir,
 		rc = adsp_err_get_lnx_err_code(
 			atomic_read(&ac->mem_state));
 		kfree(buffer_node);
-		buffer_node = NULL;
 		goto fail_cmd;
 	}
 	mutex_lock(&ac->cmd_lock);
@@ -8566,7 +8563,6 @@ static int q6asm_memory_map_regions(struct audio_client *ac, int dir,
 	rc = 0;
 fail_cmd:
 	kfree(mmap_region_cmd);
-	mmap_region_cmd = NULL;
 	return rc;
 }
 EXPORT_SYMBOL(q6asm_memory_map_regions);
@@ -8662,7 +8658,6 @@ fail_cmd:
 		if (buf_node->buf_phys_addr == buf_add) {
 			list_del(&buf_node->list);
 			kfree(buf_node);
-			buf_node = NULL;
 			break;
 		}
 	}
