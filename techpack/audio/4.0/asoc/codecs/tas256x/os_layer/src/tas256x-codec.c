@@ -539,7 +539,7 @@ static int tas256x_mute_stream(struct snd_soc_dai *dai, int mute, int stream)
 			SNDRV_PCM_STREAM_PLAYBACK)) {
 		/* Bypass Algo Get/Set During RCV Mode */
 		if (p_tas256x->algo_bypass == 0) {
-#if IS_ENABLED(CONFIG_TAS25XX_CALIB_VAL_BIG)
+#if IS_ENABLED(CONFIG_TAS25XX_CALIB_VAL_BIG) && !IS_ENABLED(CONFIG_SEC_GTA4XLVE_PROJECT)
 			tas25xx_update_big_data();
 #endif /* CONFIG_TAS25XX_CALIB_VAL_BIG */
 #if IS_ENABLED(CONFIG_TISA_KBIN_INTF)
