@@ -24,13 +24,7 @@ include $(srctree)/techpack/audio/config/sm8150auto.conf
 export
 endif
 ifeq ($(CONFIG_ARCH_ATOLL), y)
-ifeq ($(PROJECT_NAME),$(filter $(PROJECT_NAME),a52q))
-include $(srctree)/techpack/audio/4.0/config/sm7125_a52.conf
-else ifeq ($(PROJECT_NAME),$(filter $(PROJECT_NAME),m42q))
-include $(srctree)/techpack/audio/4.0/config/sm7125_m42.conf
-else ifeq ($(PROJECT_NAME),$(filter $(PROJECT_NAME),a72q))
-include $(srctree)/techpack/audio/4.0/config/sm7125_a72.conf
-else ifeq ($(PROJECT_NAME),$(filter $(PROJECT_NAME),gta4xlve gta4xlvewifi))
+ifeq ($(CONFIG_SEC_GTA4XLVE_PROJECT), y)
 include $(srctree)/techpack/audio/4.0/config/sm7125_gta4xlve.conf
 else
 include $(srctree)/techpack/audio/4.0/config/atollauto.conf
@@ -109,16 +103,7 @@ LINUXINCLUDE    += \
                 -include $(srctree)/techpack/audio/config/sm8150autoconf.h
 endif
 ifeq ($(CONFIG_ARCH_ATOLL), y)
-ifeq ($(PROJECT_NAME),$(filter $(PROJECT_NAME),a52q))
-LINUXINCLUDE    += \
-                -include $(srctree)/techpack/audio/4.0/config/sm7125_a52.h
-else ifeq ($(PROJECT_NAME),$(filter $(PROJECT_NAME),m42q))
-LINUXINCLUDE    += \
-                -include $(srctree)/techpack/audio/4.0/config/sm7125_m42.h
-else ifeq ($(PROJECT_NAME),$(filter $(PROJECT_NAME),a72q))
-LINUXINCLUDE    += \
-                -include $(srctree)/techpack/audio/4.0/config/sm7125_a72.h
-else ifeq ($(PROJECT_NAME),$(filter $(PROJECT_NAME),gta4xlve gta4xlvewifi))
+ifeq ($(CONFIG_SEC_GTA4XLVE_PROJECT), y)
 LINUXINCLUDE    += \
                 -include $(srctree)/techpack/audio/4.0/config/sm7125_gta4xlve.h
 else
