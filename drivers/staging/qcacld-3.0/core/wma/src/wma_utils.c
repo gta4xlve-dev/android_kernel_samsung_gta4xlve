@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -396,8 +396,7 @@ static uint16_t wma_match_he_rate(uint16_t raw_rate,
 								guard_interval);
 
 				if (match_rate) {
-					*mcs_rate_flag &= ~(TX_RATE_HE80 |
-							    TX_RATE_HE160);
+					*mcs_rate_flag &= ~TX_RATE_HE80;
 					goto rate_found;
 				}
 			}
@@ -805,6 +804,7 @@ int wma_profile_data_report_event_handler(void *handle, uint8_t *event_buf,
 	wmi_wlan_profile_t *profile_data;
 	uint32_t i = 0;
 	uint32_t entries;
+	uint8_t *buf_ptr;
 	char temp_str[150];
 
 	param_buf = (WMI_WLAN_PROFILE_DATA_EVENTID_param_tlvs *) event_buf;
@@ -812,9 +812,12 @@ int wma_profile_data_report_event_handler(void *handle, uint8_t *event_buf,
 		WMA_LOGE("%s: Invalid profile data event buf", __func__);
 		return -EINVAL;
 	}
-
 	profile_ctx = param_buf->profile_ctx;
+	buf_ptr = (uint8_t *)profile_ctx;
+	buf_ptr = buf_ptr + sizeof(wmi_wlan_profile_ctx_t) + WMI_TLV_HDR_SIZE;
+	profile_data = (wmi_wlan_profile_t *) buf_ptr;
 	entries = profile_ctx->bin_count;
+
 	if (entries > param_buf->num_profile_data) {
 		WMA_LOGE("FW bin count %d more than data %d in TLV hdr",
 			 entries,
@@ -843,7 +846,6 @@ int wma_profile_data_report_event_handler(void *handle, uint8_t *event_buf,
 	QDF_TRACE(QDF_MODULE_ID_WMA, QDF_TRACE_LEVEL_ERROR,
 		  "Profile ID: Count: TOT: Min: Max: hist_intvl: hist[0]: hist[1]:hist[2]");
 
-	profile_data = param_buf->profile_data;
 	for (i = 0; i < entries; i++) {
 		if (i == WMI_WLAN_PROFILE_MAX_BIN_CNT)
 			break;
@@ -1120,9 +1122,9 @@ wma_fill_tx_stats(struct sir_wifi_ll_ext_stats *ll_stats,
 	struct sir_wifi_tx *tx_stats;
 	struct sir_wifi_ll_ext_peer_stats *peer_stats;
 	uint32_t *tx_mpdu_aggr, *tx_succ_mcs, *tx_fail_mcs, *tx_delay;
-	uint32_t len, dst_len, param_len, num_entries,
-		 tx_mpdu_aggr_array_len, tx_succ_mcs_array_len,
-		 tx_fail_mcs_array_len, tx_delay_array_len;
+	uint32_t len, dst_len, param_len, tx_mpdu_aggr_array_len,
+		 tx_succ_mcs_array_len, tx_fail_mcs_array_len,
+		 tx_delay_array_len;
 
 	result = *buf;
 	dst_len = *buf_length;
@@ -1198,12 +1200,6 @@ wma_fill_tx_stats(struct sir_wifi_ll_ext_stats *ll_stats,
 	if (!wmi_peer_tx || !wmi_tx || !peer_stats) {
 		WMA_LOGE(FL("Invalid arg, peer_tx %pK, wmi_tx %pK stats %pK"),
 			 wmi_peer_tx, wmi_tx, peer_stats);
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	num_entries = fix_param->num_peer_ac_tx_stats * WLAN_MAX_AC;
-	if (num_entries > param_buf->num_tx_stats) {
-		wma_err("tx stats invalid arg, %d", num_entries);
 		return QDF_STATUS_E_FAILURE;
 	}
 
@@ -3093,8 +3089,7 @@ static void dump_peer_stats_info(wmi_peer_stats_info_event_fixed_param *event,
 
 	for (i = 0; i < event->num_peers; i++) {
 		WMI_MAC_ADDR_TO_CHAR_ARRAY(&stats->peer_macaddr, mac);
-		WMA_LOGI("%s mac "QDF_MAC_ADDR_FMT, __func__,
-			 QDF_MAC_ADDR_REF(mac));
+		WMA_LOGI("%s mac %pM", __func__, mac);
 		WMA_LOGI("%s tx_bytes %d %d tx_packets %d %d",
 			 __func__,
 			 stats->tx_bytes.low_32,
@@ -4365,8 +4360,8 @@ void wma_remove_bss_peer_on_vdev_start_failure(tp_wma_handle wma,
 	WMA_LOGE("%s: ADD BSS failure for vdev %d", __func__, vdev_id);
 
 	if (!cdp_find_peer_exist(soc, pdev_id, bss_peer.bytes)) {
-		WMA_LOGE("%s Failed to find peer "QDF_MAC_ADDR_FMT,
-			 __func__, QDF_MAC_ADDR_REF(bss_peer.bytes));
+		WMA_LOGE("%s Failed to find peer %pM",
+			 __func__, bss_peer.bytes);
 		return;
 	}
 
@@ -4394,6 +4389,8 @@ QDF_STATUS wma_sta_vdev_up_send(struct vdev_mlme_obj *vdev_mlme,
 	if (QDF_IS_STATUS_ERROR(status)) {
 		WMA_LOGE("%s: Failed to send vdev up cmd: vdev %d",
 			 __func__, vdev_id);
+		policy_mgr_set_do_hw_mode_change_flag(
+			wma->psoc, false);
 		status = QDF_STATUS_E_FAILURE;
 	} else {
 		wma_set_vdev_mgmt_rate(wma, vdev_id);

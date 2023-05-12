@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -451,7 +450,6 @@ int hdd_set_p2p_noa(struct net_device *dev, uint8_t *command)
 	hdd_debug("P2P_SET GO noa: count=%d interval=%d duration=%d",
 		count, interval, duration);
 	duration = MS_TO_TU_MUS(duration);
-	interval = MS_TO_TU_MUS(interval);
 	/* PS Selection
 	 * Periodic noa (2)
 	 * Single NOA   (4)
@@ -459,21 +457,15 @@ int hdd_set_p2p_noa(struct net_device *dev, uint8_t *command)
 	noa.opp_ps = 0;
 	noa.ct_window = 0;
 	if (count == 1) {
-		if (duration > interval)
-			duration = interval;
 		noa.duration = 0;
 		noa.single_noa_duration = duration;
 		noa.ps_selection = P2P_POWER_SAVE_TYPE_SINGLE_NOA;
 	} else {
-		if (count && (duration >= interval)) {
-			hdd_err("Duration should be less than interval");
-			return -EINVAL;
-		}
 		noa.duration = duration;
 		noa.single_noa_duration = 0;
 		noa.ps_selection = P2P_POWER_SAVE_TYPE_PERIODIC_NOA;
 	}
-	noa.interval = interval;
+	noa.interval = MS_TO_TU_MUS(interval);
 	noa.count = count;
 	noa.vdev_id = adapter->vdev_id;
 
@@ -704,8 +696,14 @@ struct wireless_dev *__wlan_hdd_add_virtual_intf(struct wiphy *wiphy,
 
 	adapter = NULL;
 	cfg_p2p_get_device_addr_admin(hdd_ctx->psoc, &p2p_dev_addr_admin);
+#ifdef SEC_READ_MACADDR_SYSFS
+	if ((p2p_dev_addr_admin &&
+	    (mode == QDF_P2P_GO_MODE || mode == QDF_P2P_CLIENT_MODE)
+        ) || !(strncmp(name, "swlan", 5))) {
+#else //!SEC_READ_MACADDR_SYSFS
 	if (p2p_dev_addr_admin &&
 	    (mode == QDF_P2P_GO_MODE || mode == QDF_P2P_CLIENT_MODE)) {
+#endif //SEC_READ_MACADDR_SYSFS
 		/*
 		 * Generate the P2P Interface Address. this address must be
 		 * different from the P2P Device Address.
@@ -734,8 +732,6 @@ struct wireless_dev *__wlan_hdd_add_virtual_intf(struct wiphy *wiphy,
 		hdd_err("hdd_open_adapter failed");
 		return ERR_PTR(-ENOSPC);
 	}
-
-	adapter->delete_in_progress = false;
 
 	/* ensure physcial soc is up */
 	ret = hdd_trigger_psoc_idle_restart(hdd_ctx);
@@ -884,9 +880,7 @@ int wlan_hdd_del_virtual_intf(struct wiphy *wiphy, struct wireless_dev *wdev)
 {
 	int errno;
 	struct osif_vdev_sync *vdev_sync;
-	struct hdd_adapter *adapter = WLAN_HDD_GET_PRIV_PTR(wdev->netdev);
 
-	adapter->delete_in_progress = true;
 	errno = osif_vdev_sync_trans_start_wait(wdev->netdev, &vdev_sync);
 	if (errno)
 		return errno;
@@ -1012,7 +1006,7 @@ __hdd_indicate_mgmt_frame_to_user(struct hdd_adapter *adapter,
 			 * we are dropping action frame
 			 */
 			hdd_err("adapter for action frame is NULL Macaddr = "
-				QDF_MAC_ADDR_FMT, QDF_MAC_ADDR_REF(dest_addr));
+				QDF_MAC_ADDR_STR, QDF_MAC_ADDR_ARRAY(dest_addr));
 			hdd_debug("Frame Type = %d Frame Length = %d subType = %d",
 				  frame_type, frm_len, sub_type);
 			/*

@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2011-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -448,8 +447,8 @@ void lim_set_bcn_probe_filter(struct mac_context *mac_ctx,
 	if (eSIR_INFRASTRUCTURE_MODE == bss_type) {
 		filter->num_sta_sessions++;
 		sir_copy_mac_addr(filter->sta_bssid[session_id], *bssid);
-		pe_debug("Set filter for STA Session %d bssid "QDF_MAC_ADDR_FMT,
-			session_id, QDF_MAC_ADDR_REF(*bssid));
+		pe_debug("Set filter for STA Session %d bssid "QDF_MAC_ADDR_STR,
+			session_id, QDF_MAC_ADDR_ARRAY(*bssid));
 	} else if (eSIR_IBSS_MODE == bss_type) {
 		if (!ibss_ssid) {
 			pe_err("IBSS Type with NULL SSID");
@@ -646,8 +645,8 @@ struct pe_session *pe_create_session(struct mac_context *mac,
 	session_ptr->is_session_obss_color_collision_det_enabled =
 		mac->mlme_cfg->obss_ht40.obss_color_collision_offload_enabled;
 
-	pe_debug("Create PE session: %d opmode %d vdev_id %d  BSSID: "QDF_MAC_ADDR_FMT" Max No of STA: %d",
-		 *sessionId, opmode, vdev_id, QDF_MAC_ADDR_REF(bssid),
+	pe_debug("Create PE session: %d opmode %d vdev_id %d  BSSID: "QDF_MAC_ADDR_STR" Max No of STA: %d",
+		 *sessionId, opmode, vdev_id, QDF_MAC_ADDR_ARRAY(bssid),
 		 numSta);
 
 	if (eSIR_INFRA_AP_MODE == bssType || eSIR_IBSS_MODE == bssType) {
@@ -711,9 +710,6 @@ struct pe_session *pe_create_session(struct mac_context *mac,
 		if (status != QDF_STATUS_SUCCESS)
 			pe_err("cannot create ap_ecsa_timer");
 	}
-	if (session_ptr->opmode == QDF_STA_MODE)
-		session_ptr->is_session_obss_color_collision_det_enabled =
-			mac->mlme_cfg->obss_ht40.bss_color_collision_det_sta;
 	pe_init_fils_info(session_ptr);
 	pe_init_pmf_comeback_timer(mac, session_ptr);
 	session_ptr->ht_client_cnt = 0;
@@ -880,9 +876,9 @@ void pe_delete_session(struct mac_context *mac_ctx, struct pe_session *session)
 		return;
 	}
 
-	pe_debug("Delete PE session: %d opmode: %d vdev_id: %d BSSID: "QDF_MAC_ADDR_FMT,
+	pe_debug("Delete PE session: %d opmode: %d vdev_id: %d BSSID: "QDF_MAC_ADDR_STR,
 		 session->peSessionId, session->opmode, session->vdev_id,
-		 QDF_MAC_ADDR_REF(session->bssId));
+		 QDF_MAC_ADDR_ARRAY(session->bssId));
 
 	lim_reset_bcn_probe_filter(mac_ctx, session);
 	lim_sae_auth_cleanup_retry(mac_ctx, session->vdev_id);
@@ -1096,8 +1092,7 @@ struct pe_session *pe_find_session_by_peer_sta(struct mac_context *mac, uint8_t 
 		}
 	}
 
-	pe_debug("Session lookup fails for Peer StaId: "QDF_MAC_ADDR_FMT,
-		 QDF_MAC_ADDR_REF(sa));
+	pe_debug("Session lookup fails for Peer StaId: %pM", sa);
 	return NULL;
 }
 

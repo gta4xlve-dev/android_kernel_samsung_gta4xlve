@@ -204,6 +204,39 @@ static inline struct sk_buff *hdd_skb_orphan(struct hdd_adapter *adapter,
 
 	return skb;
 }
+
+#else
+/**
+ * hdd_skb_orphan() - skb_unshare a cloned packed else skb_orphan
+ * @adapter: pointer to HDD adapter
+ * @skb: pointer to skb data packet
+ *
+ * Return: pointer to skb structure
+ */
+static inline struct sk_buff *hdd_skb_orphan(struct hdd_adapter *adapter,
+		struct sk_buff *skb) {
+
+	struct sk_buff *nskb;
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(3, 19, 0))
+	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
+#endif
+
+	hdd_skb_fill_gso_size(adapter->dev, skb);
+
+	nskb = skb_unshare(skb, GFP_ATOMIC);
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(3, 19, 0))
+	if (unlikely(hdd_ctx->config->tx_orphan_enable) && (nskb == skb)) {
+		/*
+		 * For UDP packets we want to orphan the packet to allow the app
+		 * to send more packets. The flow would ultimately be controlled
+		 * by the limited number of tx descriptors for the vdev.
+		 */
+		++adapter->hdd_stats.tx_rx_stats.tx_orphaned;
+		skb_orphan(skb);
+	}
+#endif
+	return nskb;
+}
 #endif /* QCA_LL_LEGACY_TX_FLOW_CONTROL */
 
 #define IEEE8021X_AUTH_TYPE_EAP 0
@@ -263,14 +296,12 @@ static void hdd_softap_inspect_tx_eap_pkt(struct hdd_adapter *adapter,
 	if (!sta_info)
 		return;
 	if (tx_comp) {
-		hdd_debug("eap_failure frm tx done "QDF_MAC_ADDR_FMT,
-			  QDF_MAC_ADDR_REF(mac_addr->bytes));
+		hdd_debug("eap_failure frm tx done %pM", mac_addr);
 		qdf_atomic_clear_bit(PENDING_TYPE_EAP_FAILURE,
 				     &sta_info->pending_eap_frm_type);
 		qdf_event_set(&hapd_state->qdf_sta_eap_frm_done_event);
 	} else {
-		hdd_debug("eap_failure frm tx pending "QDF_MAC_ADDR_FMT,
-			  QDF_MAC_ADDR_REF(mac_addr->bytes));
+		hdd_debug("eap_failure frm tx pending %pM", mac_addr);
 		qdf_event_reset(&hapd_state->qdf_sta_eap_frm_done_event);
 		qdf_atomic_set_bit(PENDING_TYPE_EAP_FAILURE,
 				   &sta_info->pending_eap_frm_type);
@@ -302,8 +333,7 @@ void hdd_softap_check_wait_for_tx_eap_pkt(struct hdd_adapter *adapter,
 		return;
 	if (qdf_atomic_test_bit(PENDING_TYPE_EAP_FAILURE,
 				&sta_info->pending_eap_frm_type)) {
-		hdd_debug("eap_failure frm pending "QDF_MAC_ADDR_FMT,
-			  QDF_MAC_ADDR_REF(mac_addr->bytes));
+		hdd_debug("eap_failure frm pending %pM", mac_addr);
 		qdf_status = qdf_wait_for_event_completion(
 				&hapd_state->qdf_sta_eap_frm_done_event,
 				EAP_FRM_TIME_OUT);
@@ -329,8 +359,8 @@ int hdd_post_dhcp_ind(struct hdd_adapter *adapter, uint8_t *mac_addr,
 	tAniDHCPInd pmsg;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
-	hdd_debug("Post DHCP indication,sta_mac=" QDF_MAC_ADDR_FMT
-		  " ,  type=%d", QDF_MAC_ADDR_REF(mac_addr), type);
+	hdd_debug("Post DHCP indication,sta_mac=" QDF_MAC_ADDR_STR
+		  " ,  type=%d", QDF_MAC_ADDR_ARRAY(mac_addr), type);
 
 	if (!adapter) {
 		hdd_err("NULL adapter");
@@ -519,11 +549,6 @@ static void __hdd_softap_hard_start_xmit(struct sk_buff *skb,
 		goto drop_pkt;
 	}
 
-	if (hdd_ctx->hdd_wlan_suspended) {
-		hdd_err_rl("Device is system suspended, drop pkt");
-		goto drop_pkt;
-	}
-
 	/*
 	 * If the device is operating on a DFS Channel
 	 * then check if SAP is in CAC WAIT state and
@@ -578,9 +603,9 @@ static void __hdd_softap_hard_start_xmit(struct sk_buff *skb,
 		if (sta_info->is_deauth_in_progress) {
 			QDF_TRACE(QDF_MODULE_ID_HDD_SAP_DATA,
 				  QDF_TRACE_LEVEL_INFO_HIGH,
-				  "%s: STA " QDF_MAC_ADDR_FMT
+				  "%s: STA " QDF_MAC_ADDR_STR
 				  "deauth in progress", __func__,
-				  QDF_MAC_ADDR_REF(sta_info->sta_mac.bytes));
+				  QDF_MAC_ADDR_ARRAY(sta_info->sta_mac.bytes));
 			goto drop_pkt;
 		}
 
@@ -684,8 +709,8 @@ static void __hdd_softap_hard_start_xmit(struct sk_buff *skb,
 	if (adapter->tx_fn(soc, adapter->vdev_id, (qdf_nbuf_t)skb)) {
 		QDF_TRACE(QDF_MODULE_ID_HDD_SAP_DATA, QDF_TRACE_LEVEL_INFO_HIGH,
 			  "%s: Failed to send packet to txrx for sta: "
-			  QDF_MAC_ADDR_FMT, __func__,
-			  QDF_MAC_ADDR_REF(dest_mac_addr->bytes));
+			  QDF_MAC_ADDR_STR, __func__,
+			  QDF_MAC_ADDR_ARRAY(dest_mac_addr->bytes));
 		++adapter->hdd_stats.tx_rx_stats.tx_dropped_ac[ac];
 		goto drop_pkt_and_release_skb;
 	}
@@ -943,8 +968,8 @@ QDF_STATUS hdd_softap_init_tx_rx_sta(struct hdd_adapter *adapter,
 					   STA_INFO_SOFTAP_INIT_TX_RX_STA);
 
 	if (sta_info) {
-		hdd_err("Reinit of in use station " QDF_MAC_ADDR_FMT,
-			QDF_MAC_ADDR_REF(sta_mac->bytes));
+		hdd_err("Reinit of in use station " QDF_MAC_ADDR_STR,
+			QDF_MAC_ADDR_ARRAY(sta_mac->bytes));
 		status = hdd_sta_info_re_attach(&adapter->sta_info_list,
 						sta_info, sta_mac);
 		hdd_put_sta_info_ref(&adapter->sta_info_list, &sta_info, true,
@@ -961,8 +986,8 @@ QDF_STATUS hdd_softap_init_tx_rx_sta(struct hdd_adapter *adapter,
 
 	status = hdd_sta_info_attach(&adapter->sta_info_list, sta_info);
 	if (QDF_IS_STATUS_ERROR(status)) {
-		hdd_err("Failed to attach station: " QDF_MAC_ADDR_FMT,
-			QDF_MAC_ADDR_REF(sta_mac->bytes));
+		hdd_err("Failed to attach station: " QDF_MAC_ADDR_STR,
+			QDF_MAC_ADDR_ARRAY(sta_mac->bytes));
 		qdf_mem_free(sta_info);
 	}
 
@@ -1103,15 +1128,6 @@ QDF_STATUS hdd_softap_rx_packet_cbk(void *adapter_context, qdf_nbuf_t rx_buf)
 					     STA_INFO_SOFTAP_RX_PACKET_CBK);
 		}
 
-		if (qdf_unlikely(qdf_nbuf_is_ipv4_eapol_pkt(skb) &&
-				 qdf_mem_cmp(qdf_nbuf_data(skb) +
-					     QDF_NBUF_DEST_MAC_OFFSET,
-					     adapter->mac_addr.bytes,
-					     QDF_MAC_ADDR_SIZE))) {
-			qdf_nbuf_free(skb);
-			continue;
-		}
-
 		hdd_event_eapol_log(skb, QDF_RX);
 		qdf_dp_trace_log_pkt(adapter->vdev_id,
 				     skb, QDF_RX, QDF_TRACE_DEFAULT_PDEV_ID);
@@ -1125,6 +1141,19 @@ QDF_STATUS hdd_softap_rx_packet_cbk(void *adapter_context, qdf_nbuf_t rx_buf)
 
 		skb->protocol = eth_type_trans(skb, skb->dev);
 
+		/* hold configurable wakelock for unicast traffic */
+		if (!hdd_is_current_high_throughput(hdd_ctx) &&
+		    hdd_ctx->config->rx_wakelock_timeout &&
+		    skb->pkt_type != PACKET_BROADCAST &&
+		    skb->pkt_type != PACKET_MULTICAST) {
+			cds_host_diag_log_work(&hdd_ctx->rx_wake_lock,
+						   hdd_ctx->config->rx_wakelock_timeout,
+						   WIFI_POWER_EVENT_WAKELOCK_HOLD_RX);
+			qdf_wake_lock_timeout_acquire(&hdd_ctx->rx_wake_lock,
+							  hdd_ctx->config->
+								  rx_wakelock_timeout);
+		}
+
 		/* Remove SKB from internal tracking table before submitting
 		 * it to stack
 		 */
@@ -1134,10 +1163,15 @@ QDF_STATUS hdd_softap_rx_packet_cbk(void *adapter_context, qdf_nbuf_t rx_buf)
 
 		qdf_status = hdd_rx_deliver_to_stack(adapter, skb);
 
-		if (QDF_IS_STATUS_SUCCESS(qdf_status))
+		if (QDF_IS_STATUS_SUCCESS(qdf_status)) {
 			++adapter->hdd_stats.tx_rx_stats.rx_delivered[cpu_index];
-		else
+		} else {
 			++adapter->hdd_stats.tx_rx_stats.rx_refused[cpu_index];
+			DPTRACE(qdf_dp_log_proto_pkt_info(NULL, NULL, 0, 0,
+						      QDF_RX,
+						      QDF_TRACE_DEFAULT_MSDU_ID,
+						      QDF_TX_RX_STATUS_DROP));
+		}
 	}
 
 	return QDF_STATUS_SUCCESS;
@@ -1275,9 +1309,9 @@ QDF_STATUS hdd_softap_register_sta(struct hdd_adapter *adapter,
 	sta_info->is_qos_enabled = wmm_enabled;
 
 	if (!auth_required) {
-		hdd_debug("open/shared auth STA MAC= " QDF_MAC_ADDR_FMT
+		hdd_debug("open/shared auth STA MAC= " QDF_MAC_ADDR_STR
 			  ".  Changing TL state to AUTHENTICATED at Join time",
-			 QDF_MAC_ADDR_REF(sta_info->sta_mac.bytes));
+			 QDF_MAC_ADDR_ARRAY(sta_info->sta_mac.bytes));
 
 		/* Connections that do not need Upper layer auth,
 		 * transition TL directly to 'Authenticated' state.
@@ -1294,9 +1328,9 @@ QDF_STATUS hdd_softap_register_sta(struct hdd_adapter *adapter,
 							sta_mac);
 	} else {
 
-		hdd_debug("ULA auth STA MAC = " QDF_MAC_ADDR_FMT
+		hdd_debug("ULA auth STA MAC = " QDF_MAC_ADDR_STR
 			  ".  Changing TL state to CONNECTED at Join time",
-			 QDF_MAC_ADDR_REF(sta_info->sta_mac.bytes));
+			 QDF_MAC_ADDR_ARRAY(sta_info->sta_mac.bytes));
 
 		qdf_status = hdd_change_peer_state(adapter,
 						   txrx_desc.peer_addr.bytes,
@@ -1374,7 +1408,7 @@ QDF_STATUS hdd_softap_stop_bss(struct hdd_adapter *adapter)
 
 	if (adapter->device_mode == QDF_SAP_MODE &&
 	    !hdd_ctx->config->disable_channel)
-		wlan_hdd_restore_channels(hdd_ctx);
+		wlan_hdd_restore_channels(hdd_ctx, true);
 
 	/*  Mark the indoor channel (passive) to enable  */
 	if (indoor_chnl_marking && adapter->device_mode == QDF_SAP_MODE) {
@@ -1411,8 +1445,8 @@ QDF_STATUS hdd_softap_change_sta_state(struct hdd_adapter *adapter,
 					   STA_INFO_SOFTAP_CHANGE_STA_STATE);
 
 	if (!sta_info) {
-		hdd_debug("Failed to find right station MAC: " QDF_MAC_ADDR_FMT,
-			  QDF_MAC_ADDR_REF(sta_mac->bytes));
+		hdd_debug("Failed to find right station MAC: " QDF_MAC_ADDR_STR,
+			  QDF_MAC_ADDR_ARRAY(sta_mac->bytes));
 		return QDF_STATUS_E_INVAL;
 	}
 
@@ -1424,8 +1458,8 @@ QDF_STATUS hdd_softap_change_sta_state(struct hdd_adapter *adapter,
 	qdf_status =
 		hdd_change_peer_state(adapter, mac_addr.bytes,
 				      state, false);
-	hdd_debug("Station " QDF_MAC_ADDR_FMT " changed to state %d",
-		  QDF_MAC_ADDR_REF(mac_addr.bytes), state);
+	hdd_debug("Station " QDF_MAC_ADDR_STR " changed to state %d",
+		  QDF_MAC_ADDR_ARRAY(mac_addr.bytes), state);
 
 	if (QDF_STATUS_SUCCESS == qdf_status) {
 		sta_info->peer_state = OL_TXRX_PEER_STATE_AUTH;

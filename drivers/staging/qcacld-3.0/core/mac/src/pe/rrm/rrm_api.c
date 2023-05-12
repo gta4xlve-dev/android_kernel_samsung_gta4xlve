@@ -202,24 +202,6 @@ QDF_STATUS rrm_set_max_tx_power_rsp(struct mac_context *mac,
 	return retCode;
 }
 
-/**
- * rrm_calculate_and_fill_rcpi() - calculates and fills RCPI value
- * @rcpi: pointer to hold calculated RCPI value
- * @cur_rssi: value of current RSSI
- *
- * @return None
- */
-static void rrm_calculate_and_fill_rcpi(uint8_t *rcpi, int8_t cur_rssi)
-{
-	/* 2008 11k spec reference: 18.4.8.5 RCPI Measurement */
-	if (cur_rssi <= RCPI_LOW_RSSI_VALUE)
-		*rcpi = 0;
-	else if ((cur_rssi > RCPI_LOW_RSSI_VALUE) && (cur_rssi <= 0))
-		*rcpi = CALCULATE_RCPI(cur_rssi);
-	else
-		*rcpi = RCPI_MAX_VALUE;
-}
-
 /* -------------------------------------------------------------------- */
 /**
  * rrm_process_link_measurement_request
@@ -292,7 +274,14 @@ rrm_process_link_measurement_request(struct mac_context *mac,
 
 	pe_info("Received Link report frame with %d", currentRSSI);
 
-	rrm_calculate_and_fill_rcpi(&LinkReport.rcpi, currentRSSI);
+	/* 2008 11k spec reference: 18.4.8.5 RCPI Measurement */
+	if ((currentRSSI) <= RCPI_LOW_RSSI_VALUE)
+		LinkReport.rcpi = 0;
+	else if ((currentRSSI > RCPI_LOW_RSSI_VALUE) && (currentRSSI <= 0))
+		LinkReport.rcpi = CALCULATE_RCPI(currentRSSI);
+	else
+		LinkReport.rcpi = RCPI_MAX_VALUE;
+
 	LinkReport.rsni = WMA_GET_RX_SNR(pRxPacketInfo);
 
 	pe_debug("Sending Link report frame");
@@ -601,11 +590,11 @@ rrm_process_beacon_report_req(struct mac_context *mac,
 
 	measDuration = pBeaconReq->measurement_request.Beacon.meas_duration;
 
-	pe_nofl_info("RX: [802.11 BCN_RPT] seq:%d SSID:%.*s BSSID:"QDF_MAC_ADDR_FMT" Token:%d op_class:%d ch:%d meas_mode:%d meas_duration:%d max_dur: %d sign: %d max_meas_dur: %d",
+	pe_nofl_info("RX: [802.11 BCN_RPT] seq:%d SSID:%.*s BSSID:%pM Token:%d op_class:%d ch:%d meas_mode:%d meas_duration:%d max_dur: %d sign: %d max_meas_dur: %d",
 		     mac->rrm.rrmPEContext.prev_rrm_report_seq_num,
 		     pBeaconReq->measurement_request.Beacon.SSID.num_ssid,
 		     pBeaconReq->measurement_request.Beacon.SSID.ssid,
-		     QDF_MAC_ADDR_REF(pBeaconReq->measurement_request.Beacon.BSSID),
+		     pBeaconReq->measurement_request.Beacon.BSSID,
 		     pBeaconReq->measurement_token,
 		     pBeaconReq->measurement_request.Beacon.regClass,
 		     pBeaconReq->measurement_request.Beacon.channel,
@@ -921,7 +910,9 @@ rrm_process_beacon_report_xmit(struct mac_context *mac_ctx,
 	tSirMacRadioMeasureReport *report = NULL;
 	tSirMacBeaconReport *beacon_report;
 	struct bss_description *bss_desc;
-	tpRRMReq curr_req;
+	tpRRMReq curr_req =
+		mac_ctx->rrm.rrmPEContext.
+		pCurrentReq[beacon_xmit_ind->measurement_idx];
 	struct pe_session *session_entry;
 	uint8_t session_id, counter;
 	uint8_t i, j, offset = 0;
@@ -938,16 +929,6 @@ rrm_process_beacon_report_xmit(struct mac_context *mac_ctx,
 		return QDF_STATUS_E_FAILURE;
 	}
 
-	if (beacon_xmit_ind->measurement_idx >=
-	    QDF_ARRAY_SIZE(mac_ctx->rrm.rrmPEContext.pCurrentReq)) {
-		pe_err("Received measurement_idx is out of range: %u - %zu",
-		       beacon_xmit_ind->measurement_idx,
-		       QDF_ARRAY_SIZE(mac_ctx->rrm.rrmPEContext.pCurrentReq));
-		return QDF_STATUS_E_FAILURE;
-	}
-
-	curr_req = mac_ctx->rrm.rrmPEContext.
-		pCurrentReq[beacon_xmit_ind->measurement_idx];
 	if (!curr_req) {
 		pe_err("Received report xmit while there is no request pending in PE");
 		status = QDF_STATUS_E_FAILURE;
@@ -973,8 +954,8 @@ rrm_process_beacon_report_xmit(struct mac_context *mac_ctx,
 		session_entry = pe_find_session_by_bssid(mac_ctx,
 				beacon_xmit_ind->bssId, &session_id);
 		if (!session_entry) {
-			pe_err("TX: [802.11 BCN_RPT] Session does not exist for bssId:"QDF_MAC_ADDR_FMT"",
-			       QDF_MAC_ADDR_REF(beacon_xmit_ind->bssId));
+			pe_err("TX: [802.11 BCN_RPT] Session does not exist for bssId:%pM",
+			       beacon_xmit_ind->bssId);
 			status = QDF_STATUS_E_FAILURE;
 			goto end;
 		}
@@ -1025,9 +1006,7 @@ rrm_process_beacon_report_xmit(struct mac_context *mac_ctx,
 				beacon_report->phyType = bss_desc->nwType;
 				beacon_report->bcnProbeRsp = 1;
 				beacon_report->rsni = bss_desc->sinr;
-
-				rrm_calculate_and_fill_rcpi(&beacon_report->rcpi,
-							    bss_desc->rssi);
+				beacon_report->rcpi = bss_desc->rssi;
 				beacon_report->antennaId = 0;
 				beacon_report->parentTSF = bss_desc->parentTSF;
 				qdf_mem_copy(beacon_report->bssid,
@@ -1220,13 +1199,13 @@ QDF_STATUS rrm_process_beacon_req(struct mac_context *mac_ctx, tSirMacAddr peer,
 				  uint8_t *num_report, int index)
 {
 	tRrmRetStatus rrm_status = eRRM_SUCCESS;
-	tpSirMacRadioMeasureReport report = NULL;
+	tpSirMacRadioMeasureReport report;
 	tpRRMReq curr_req;
 	QDF_STATUS status = QDF_STATUS_SUCCESS;
 
 	if (index  >= MAX_MEASUREMENT_REQUEST) {
 		status = rrm_reject_req(&report, rrm_req, num_report, index,
-			       rrm_req->MeasurementRequest[0].
+			       rrm_req->MeasurementRequest[index].
 							measurement_type);
 		return status;
 	}

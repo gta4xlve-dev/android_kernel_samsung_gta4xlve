@@ -263,16 +263,6 @@ int hif_dummy_grp_irq_configure(struct hif_softc *hif_sc,
 }
 
 /**
- * hif_dummy_grp_irq_deconfigure - dummy call
- * hif_sc: hif context
- *
- * Return: none
- */
-void hif_dummy_grp_irq_deconfigure(struct hif_softc *hif_sc)
-{
-}
-
-/**
  * hif_dummy_dump_registers - dummy call
  * hif_sc: hif context
  *
@@ -394,10 +384,9 @@ void hif_dummy_config_irq_affinity(struct hif_softc *scn)
  * @data: hang event data buffer
  * @offset: offset at which data needs to be written
  *
- * Return: bool
+ * Return: None
  */
-bool hif_dummy_log_bus_info(struct hif_softc *scn, uint8_t *data,
+void hif_dummy_log_bus_info(struct hif_softc *scn, uint8_t *data,
 			    unsigned int *offset)
 {
-	return false;
 }

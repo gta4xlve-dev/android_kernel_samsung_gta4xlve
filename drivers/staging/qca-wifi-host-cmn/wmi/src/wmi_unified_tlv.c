@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2016-2021 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -678,9 +678,6 @@ static QDF_STATUS wmi_unified_cmd_send_pm_chk(struct wmi_unified *wmi_handle,
 					      wmi_buf_t buf,
 					      uint32_t buflen, uint32_t cmd_id)
 {
-	if (!wmi_is_qmi_stats_enabled(wmi_handle))
-		goto send_over_wmi;
-
 	if (wmi_is_target_suspended(wmi_handle)) {
 		if (QDF_IS_STATUS_SUCCESS(
 		    wmi_unified_cmd_send_over_qmi(wmi_handle, buf,
@@ -688,7 +685,6 @@ static QDF_STATUS wmi_unified_cmd_send_pm_chk(struct wmi_unified *wmi_handle,
 			return QDF_STATUS_SUCCESS;
 	}
 
-send_over_wmi:
 	qdf_atomic_set(&wmi_handle->num_stats_over_qmi, 0);
 
 	return wmi_unified_cmd_send(wmi_handle, buf, buflen, cmd_id);
@@ -741,9 +737,10 @@ static QDF_STATUS send_vdev_create_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->num_cfg_txrx_streams = num_bands;
 	copy_vdev_create_pdev_id(wmi_handle, cmd, param);
 	WMI_CHAR_ARRAY_TO_MAC_ADDR(macaddr, &cmd->vdev_macaddr);
-	WMI_LOGD("%s: ID = %d[pdev:%d] VAP Addr = "QDF_MAC_ADDR_FMT,
+	WMI_LOGD("%s: ID = %d[pdev:%d] VAP Addr = %02x:%02x:%02x:%02x:%02x:%02x",
 		 __func__, param->vdev_id, cmd->pdev_id,
-		 QDF_MAC_ADDR_REF(macaddr));
+		 macaddr[0], macaddr[1], macaddr[2],
+		 macaddr[3], macaddr[4], macaddr[5]);
 	buf_ptr = (uint8_t *)cmd + sizeof(*cmd);
 	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
 			(num_bands * sizeof(wmi_vdev_txrx_streams)));
@@ -1047,7 +1044,7 @@ static QDF_STATUS send_vdev_start_cmd_tlv(wmi_unified_t wmi_handle,
 	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_STRUC,
 		       cmd->num_noa_descriptors *
 		       sizeof(wmi_p2p_noa_descriptor));
-	wmi_info("%s: vdev_id %d freq %d chanmode %d ch_info: 0x%x is_dfs %d "
+	WMI_LOGI("%s: vdev_id %d freq %d chanmode %d ch_info: 0x%x is_dfs %d "
 		"beacon interval %d dtim %d center_chan %d center_freq2 %d "
 		"reg_info_1: 0x%x reg_info_2: 0x%x, req->max_txpow: 0x%x "
 		"Tx SS %d, Rx SS %d, ldpc_rx: %d, cac %d, regd %d, HE ops: %d"
@@ -1107,9 +1104,9 @@ static QDF_STATUS send_peer_flush_tids_cmd_tlv(wmi_unified_t wmi,
 	WMI_CHAR_ARRAY_TO_MAC_ADDR(peer_addr, &cmd->peer_macaddr);
 	cmd->peer_tid_bitmap = param->peer_tid_bitmap;
 	cmd->vdev_id = param->vdev_id;
-	WMI_LOGD("%s: peer_addr "QDF_MAC_ADDR_FMT" vdev_id %d and peer bitmap %d",
-		 __func__, QDF_MAC_ADDR_REF(peer_addr), param->vdev_id,
-		 param->peer_tid_bitmap);
+	WMI_LOGD("%s: peer_addr %pM vdev_id %d and peer bitmap %d", __func__,
+				peer_addr, param->vdev_id,
+				param->peer_tid_bitmap);
 	wmi_mtrace(WMI_PEER_FLUSH_TIDS_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi, buf, len, WMI_PEER_FLUSH_TIDS_CMDID)) {
 		WMI_LOGP("%s: Failed to send flush tid command", __func__);
@@ -1147,8 +1144,7 @@ static QDF_STATUS send_peer_delete_cmd_tlv(wmi_unified_t wmi,
 	WMI_CHAR_ARRAY_TO_MAC_ADDR(peer_addr, &cmd->peer_macaddr);
 	cmd->vdev_id = vdev_id;
 
-	WMI_LOGD("%s: peer_addr "QDF_MAC_ADDR_FMT" vdev_id %d",
-		 __func__, QDF_MAC_ADDR_REF(peer_addr), vdev_id);
+	WMI_LOGD("%s: peer_addr %pM vdev_id %d", __func__, peer_addr, vdev_id);
 	wmi_mtrace(WMI_PEER_DELETE_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi, buf, len, WMI_PEER_DELETE_CMDID)) {
 		WMI_LOGP("%s: Failed to send peer delete command", __func__);
@@ -1287,9 +1283,8 @@ static QDF_STATUS send_vdev_up_cmd_tlv(wmi_unified_t wmi,
 	int32_t len = sizeof(*cmd);
 
 	WMI_LOGD("%s: VDEV_UP", __func__);
-	WMI_LOGD("%s: vdev_id %d aid %d bssid "QDF_MAC_ADDR_FMT,
-		 __func__,
-		 params->vdev_id, params->assoc_id, QDF_MAC_ADDR_REF(bssid));
+	WMI_LOGD("%s: vdev_id %d aid %d bssid %pM", __func__,
+		 params->vdev_id, params->assoc_id, bssid);
 	buf = wmi_buf_alloc(wmi, len);
 	if (!buf)
 		return QDF_STATUS_E_NOMEM;
@@ -1349,9 +1344,8 @@ static QDF_STATUS send_peer_create_cmd_tlv(wmi_unified_t wmi,
 		wmi_buf_free(buf);
 		return QDF_STATUS_E_FAILURE;
 	}
-	WMI_LOGD("%s: peer_addr "QDF_MAC_ADDR_FMT" vdev_id %d",
-		 __func__, QDF_MAC_ADDR_REF(param->peer_addr),
-		param->vdev_id);
+	WMI_LOGD("%s: peer_addr %pM vdev_id %d", __func__, param->peer_addr,
+			param->vdev_id);
 
 	return 0;
 }
@@ -1399,10 +1393,8 @@ QDF_STATUS send_peer_rx_reorder_queue_setup_cmd_tlv(wmi_unified_t wmi,
 		wmi_buf_free(buf);
 		return QDF_STATUS_E_FAILURE;
 	}
-	WMI_LOGD("%s: peer_macaddr "QDF_MAC_ADDR_FMT" vdev_id %d, tid %d",
-		 __func__,
-		QDF_MAC_ADDR_REF(param->peer_macaddr),
-		param->vdev_id, param->tid);
+	WMI_LOGD("%s: peer_macaddr %pM vdev_id %d, tid %d", __func__,
+		param->peer_macaddr, param->vdev_id, param->tid);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -1445,10 +1437,8 @@ QDF_STATUS send_peer_rx_reorder_queue_remove_cmd_tlv(wmi_unified_t wmi,
 		wmi_buf_free(buf);
 		return QDF_STATUS_E_FAILURE;
 	}
-	WMI_LOGD("%s: peer_macaddr "QDF_MAC_ADDR_FMT" vdev_id %d, tid_map %d",
-		__func__,
-		QDF_MAC_ADDR_REF(param->peer_macaddr),
-		param->vdev_id, param->peer_tid_bitmap);
+	WMI_LOGD("%s: peer_macaddr %pM vdev_id %d, tid_map %d", __func__,
+		param->peer_macaddr, param->vdev_id, param->peer_tid_bitmap);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -2679,8 +2669,10 @@ static QDF_STATUS send_peer_assoc_cmd_tlv(wmi_unified_t wmi_handle,
 			 param->peer_he_tx_mcs_set[WMI_HOST_HE_TXRX_MCS_NSS_IDX_160]);
 		WMI_LOGD("param->peer_he_rx_mcs_set[160MHz]=%x",
 			 param->peer_he_rx_mcs_set[WMI_HOST_HE_TXRX_MCS_NSS_IDX_160]);
-		WMI_LOGD("peer_mac="QDF_MAC_ADDR_FMT,
-			 QDF_MAC_ADDR_REF(param->peer_mac));
+		WMI_LOGD("peer_mac=%02x:%02x:%02x:%02x:%02x:%02x",
+			 param->peer_mac[0], param->peer_mac[1],
+			 param->peer_mac[2], param->peer_mac[3],
+			 param->peer_mac[4], param->peer_mac[5]);
 	}
 
 	WMI_LOGD("%s: vdev_id %d associd %d peer_flags %x rate_caps %x "
@@ -5036,8 +5028,7 @@ static QDF_STATUS send_process_ll_stats_clear_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_LOGD("StopReq: %d", cmd->stop_stats_collection_req);
 	WMI_LOGD("Vdev Id: %d", cmd->vdev_id);
 	WMI_LOGD("Clear Stat Mask: %d", cmd->stats_clear_req_mask);
-	WMI_LOGD("Peer MAC Addr: "QDF_MAC_ADDR_FMT,
-		 QDF_MAC_ADDR_REF(clear_req->peer_macaddr.bytes));
+	WMI_LOGD("Peer MAC Addr: %pM", clear_req->peer_macaddr.bytes);
 
 	wmi_mtrace(WMI_CLEAR_LINK_STATS_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
@@ -5141,9 +5132,9 @@ static QDF_STATUS send_process_ll_stats_get_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_CHAR_ARRAY_TO_MAC_ADDR(get_req->peer_macaddr.bytes,
 				   &cmd->peer_macaddr);
 
-	WMI_LOGD("LINK_LAYER_STATS - Get Request Params Request ID: %u Stats Type: %0x Vdev ID: %d Peer MAC Addr: "QDF_MAC_ADDR_FMT,
+	WMI_LOGD("LINK_LAYER_STATS - Get Request Params Request ID: %u Stats Type: %0x Vdev ID: %d Peer MAC Addr: %pM",
 		 cmd->request_id, cmd->stats_type, cmd->vdev_id,
-		 QDF_MAC_ADDR_REF(get_req->peer_macaddr.bytes));
+		 get_req->peer_macaddr.bytes);
 
 	wmi_mtrace(WMI_REQUEST_LINK_STATS_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send_pm_chk(wmi_handle, buf, len,
@@ -5414,8 +5405,8 @@ static QDF_STATUS send_oem_dma_cfg_cmd_tlv(wmi_unified_t wmi_handle,
 
 	cmd = (uint8_t *) wmi_buf_data(buf);
 	qdf_mem_copy(cmd, cfg, sizeof(*cfg));
-	wmi_debug("Sending OEM Data Request to target, data len %lu"),
-		 sizeof(*cfg);
+	WMI_LOGI(FL("Sending OEM Data Request to target, data len %lu"),
+		sizeof(*cfg));
 	wmi_mtrace(WMI_OEM_DMA_RING_CFG_REQ_CMDID, NO_SESSION, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, sizeof(*cfg),
 				WMI_OEM_DMA_RING_CFG_REQ_CMDID);
@@ -5823,14 +5814,6 @@ static QDF_STATUS send_stats_ext_req_cmd_tlv(wmi_unified_t wmi_handle,
 	wmi_buf_t buf;
 	size_t len;
 	uint8_t *buf_ptr;
-	uint16_t max_wmi_msg_size = wmi_get_max_msg_len(wmi_handle);
-
-	if (preq->request_data_len > (max_wmi_msg_size - WMI_TLV_HDR_SIZE -
-				      sizeof(*cmd))) {
-		wmi_err("Data length=%d is greater than max wmi msg size",
-			preq->request_data_len);
-		return QDF_STATUS_E_FAILURE;
-	}
 
 	len = sizeof(*cmd) + WMI_TLV_HDR_SIZE + preq->request_data_len;
 
@@ -6201,7 +6184,7 @@ send_set_vap_dscp_tid_map_cmd_tlv(wmi_unified_t wmi_handle,
 	cmd->vdev_id = param->vdev_id;
 	cmd->enable_override = 0;
 
-	wmi_debug("Setting dscp for vap id: %d", cmd->vdev_id);
+	WMI_LOGI("Setting dscp for vap id: %d", cmd->vdev_id);
 	wmi_mtrace(WMI_VDEV_SET_DSCP_TID_MAP_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, buf, len,
 				 WMI_VDEV_SET_DSCP_TID_MAP_CMDID)) {
@@ -6438,31 +6421,33 @@ static QDF_STATUS send_vdev_spectral_configure_cmd_tlv(wmi_unified_t wmi_handle,
 		wmi_buf_free(buf);
 	}
 
-	wmi_debug("Sent WMI_VDEV_SPECTRAL_SCAN_CONFIGURE_CMDID");
-	wmi_debug("vdev_id: %u spectral_scan_count: %u",
-		 param->vdev_id, param->count);
-	wmi_debug("spectral_scan_period: %u spectral_scan_priority: %u",
-		 param->period, param->spectral_pri);
-	wmi_debug("spectral_scan_fft_size: %u spectral_scan_gc_ena: %u",
-		 param->fft_size, param->gc_enable);
-	wmi_debug("spectral_scan_restart_ena: %u", param->restart_enable);
-	wmi_debug("spectral_scan_noise_floor_ref: %u", param->noise_floor_ref);
-	wmi_debug("spectral_scan_init_delay: %u", param->init_delay);
-	wmi_debug("spectral_scan_nb_tone_thr: %u", param->nb_tone_thr);
-	wmi_debug("spectral_scan_str_bin_thr: %u", param->str_bin_thr);
-	wmi_debug("spectral_scan_wb_rpt_mode: %u", param->wb_rpt_mode);
-	wmi_debug("spectral_scan_rssi_rpt_mode: %u", param->rssi_rpt_mode);
-	wmi_debug("spectral_scan_rssi_thr: %u spectral_scan_pwr_format: %u",
-		 param->rssi_thr, param->pwr_format);
-	wmi_debug("spectral_scan_rpt_mode: %u spectral_scan_bin_scale: %u",
-		 param->rpt_mode, param->bin_scale);
-	wmi_debug("spectral_scan_dBm_adj: %u spectral_scan_chn_mask: %u",
-		 param->dbm_adj, param->chn_mask);
-	wmi_debug("spectral_scan_mode: %u spectral_scan_center_freq: %u",
-		 param->mode, param->center_freq);
-	wmi_debug("spectral_scan_chan_freq: %u", param->chan_freq);
-	wmi_debug("spectral_scan_chan_width: %u Status: %d",
-		 param->chan_width, ret);
+	WMI_LOGI("%s: Sent WMI_VDEV_SPECTRAL_SCAN_CONFIGURE_CMDID",
+		 __func__);
+
+	WMI_LOGI("vdev_id = %u", param->vdev_id);
+	WMI_LOGI("spectral_scan_count = %u", param->count);
+	WMI_LOGI("spectral_scan_period = %u", param->period);
+	WMI_LOGI("spectral_scan_priority = %u", param->spectral_pri);
+	WMI_LOGI("spectral_scan_fft_size = %u", param->fft_size);
+	WMI_LOGI("spectral_scan_gc_ena = %u", param->gc_enable);
+	WMI_LOGI("spectral_scan_restart_ena = %u", param->restart_enable);
+	WMI_LOGI("spectral_scan_noise_floor_ref = %u", param->noise_floor_ref);
+	WMI_LOGI("spectral_scan_init_delay = %u", param->init_delay);
+	WMI_LOGI("spectral_scan_nb_tone_thr = %u",  param->nb_tone_thr);
+	WMI_LOGI("spectral_scan_str_bin_thr = %u", param->str_bin_thr);
+	WMI_LOGI("spectral_scan_wb_rpt_mode = %u", param->wb_rpt_mode);
+	WMI_LOGI("spectral_scan_rssi_rpt_mode = %u", param->rssi_rpt_mode);
+	WMI_LOGI("spectral_scan_rssi_thr = %u", param->rssi_thr);
+	WMI_LOGI("spectral_scan_pwr_format = %u", param->pwr_format);
+	WMI_LOGI("spectral_scan_rpt_mode = %u", param->rpt_mode);
+	WMI_LOGI("spectral_scan_bin_scale = %u", param->bin_scale);
+	WMI_LOGI("spectral_scan_dBm_adj = %u", param->dbm_adj);
+	WMI_LOGI("spectral_scan_chn_mask = %u", param->chn_mask);
+	WMI_LOGI("spectral_scan_mode = %u", param->mode);
+	WMI_LOGI("spectral_scan_center_freq = %u", param->center_freq);
+	WMI_LOGI("spectral_scan_chan_freq = %u", param->chan_freq);
+	WMI_LOGI("spectral_scan_chan_width = %u", param->chan_width);
+	WMI_LOGI("%s: Status: %d", __func__, ret);
 
 	return ret;
 }
@@ -6511,9 +6496,10 @@ static QDF_STATUS send_vdev_spectral_enable_cmd_tlv(wmi_unified_t wmi_handle,
 	}
 	cmd->spectral_scan_mode = param->mode;
 
-	wmi_debug("vdev_id = %u trigger_cmd = %u enable_cmd = %u",
-		 cmd->vdev_id, cmd->trigger_cmd, cmd->enable_cmd);
-	wmi_debug("spectral_scan_mode = %u", cmd->spectral_scan_mode);
+	WMI_LOGI("vdev_id = %u", cmd->vdev_id);
+	WMI_LOGI("trigger_cmd = %u", cmd->trigger_cmd);
+	WMI_LOGI("enable_cmd = %u", cmd->enable_cmd);
+	WMI_LOGI("spectral_scan_mode = %u", cmd->spectral_scan_mode);
 
 	wmi_mtrace(WMI_VDEV_SPECTRAL_SCAN_ENABLE_CMDID, cmd->vdev_id, 0);
 	ret = wmi_unified_cmd_send(wmi_handle, buf, len,
@@ -6524,8 +6510,9 @@ static QDF_STATUS send_vdev_spectral_enable_cmd_tlv(wmi_unified_t wmi_handle,
 		wmi_buf_free(buf);
 	}
 
-	wmi_debug("Sent WMI_VDEV_SPECTRAL_SCAN_ENABLE_CMDID, Status: %d",
-		  ret);
+	WMI_LOGI("%s: Sent WMI_VDEV_SPECTRAL_SCAN_ENABLE_CMDID", __func__);
+
+	WMI_LOGI("%s: Status: %d", __func__, ret);
 
 	return ret;
 }
@@ -7142,7 +7129,7 @@ static QDF_STATUS send_log_supported_evt_cmd_tlv(wmi_unified_t wmi_handle,
 	WMI_DIAG_EVENT_LOG_SUPPORTED_EVENTID_param_tlvs *param_buf;
 	wmi_diag_event_log_supported_event_fixed_params *wmi_event;
 
-	wmi_debug("Received WMI_DIAG_EVENT_LOG_SUPPORTED_EVENTID");
+	WMI_LOGI("Received WMI_DIAG_EVENT_LOG_SUPPORTED_EVENTID");
 
 	param_buf = (WMI_DIAG_EVENT_LOG_SUPPORTED_EVENTID_param_tlvs *) event;
 	if (!param_buf) {
@@ -7757,12 +7744,13 @@ static QDF_STATUS send_unit_test_cmd_tlv(wmi_unified_t wmi_handle,
 	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_UINT32,
 		       (wmi_utest->num_args * sizeof(uint32_t)));
 	unit_test_cmd_args = (uint32_t *) (buf_ptr + WMI_TLV_HDR_SIZE);
-	wmi_debug("VDEV ID: %d MODULE ID: %d TOKEN: %d",
-		 cmd->vdev_id, cmd->module_id, cmd->diag_token);
-	wmi_debug("%d num of args = ", wmi_utest->num_args);
+	WMI_LOGI("%s: VDEV ID: %d", __func__, cmd->vdev_id);
+	WMI_LOGI("%s: MODULE ID: %d", __func__, cmd->module_id);
+	WMI_LOGI("%s: TOKEN: %d", __func__, cmd->diag_token);
+	WMI_LOGI("%s: %d num of args = ", __func__, wmi_utest->num_args);
 	for (i = 0; (i < wmi_utest->num_args && i < WMI_UNIT_TEST_MAX_NUM_ARGS); i++) {
 		unit_test_cmd_args[i] = wmi_utest->args[i];
-		wmi_debug("%d,", wmi_utest->args[i]);
+		WMI_LOGI("%d,", wmi_utest->args[i]);
 	}
 	wmi_mtrace(WMI_UNIT_TEST_CMDID, cmd->vdev_id, 0);
 	if (wmi_unified_cmd_send(wmi_handle, wmi_buf, len,
@@ -7818,10 +7806,10 @@ static QDF_STATUS send_power_dbg_cmd_tlv(wmi_unified_t wmi_handle,
 	WMITLV_SET_HDR(buf_ptr, WMITLV_TAG_ARRAY_UINT32,
 		       (param->num_args * sizeof(uint32_t)));
 	cmd_args = (uint32_t *) (buf_ptr + WMI_TLV_HDR_SIZE);
-	wmi_debug("%d num of args = ", param->num_args);
+	WMI_LOGI("%s: %d num of args = ", __func__, param->num_args);
 	for (i = 0; (i < param->num_args && i < WMI_MAX_POWER_DBG_ARGS); i++) {
 		cmd_args[i] = param->args[i];
-		wmi_debug("%d,", param->args[i]);
+		WMI_LOGI("%d,", param->args[i]);
 	}
 
 	wmi_mtrace(WMI_PDEV_WAL_POWER_DEBUG_CMDID, NO_SESSION, 0);
@@ -7860,7 +7848,7 @@ static QDF_STATUS send_dfs_phyerr_offload_en_cmd_tlv(wmi_unified_t wmi_handle,
 	len = sizeof(*cmd);
 	buf = wmi_buf_alloc(wmi_handle, len);
 
-	wmi_debug("pdev_id=%d", pdev_id);
+	WMI_LOGI("%s: pdev_id=%d", __func__, pdev_id);
 
 	if (!buf)
 		return QDF_STATUS_E_NOMEM;
@@ -7909,7 +7897,7 @@ static QDF_STATUS send_dfs_phyerr_offload_dis_cmd_tlv(wmi_unified_t wmi_handle,
 	len = sizeof(*cmd);
 	buf = wmi_buf_alloc(wmi_handle, len);
 
-	wmi_debug("pdev_id=%d", pdev_id);
+	WMI_LOGI("%s: pdev_id=%d", __func__, pdev_id);
 
 	if (!buf)
 		return QDF_STATUS_E_NOMEM;
@@ -8822,7 +8810,7 @@ static QDF_STATUS extract_host_mem_req_tlv(wmi_unified_t wmi_handle,
 			}
 		}
 
-		wmi_debug("idx %d req %d  num_units %d num_unit_info %d"
+		WMI_LOGI("idx %d req %d  num_units %d num_unit_info %d"
 			 "unit size %d actual units %d",
 			 idx, mem_reqs->req_id,
 			 mem_reqs->num_units,
@@ -9026,10 +9014,10 @@ static QDF_STATUS extract_mgmt_rx_params_tlv(wmi_unified_t wmi_handle,
 		return QDF_STATUS_E_INVAL;
 	}
 
-	if (ev_hdr->buf_len > param_tlvs->num_bufp) {
-		WMI_LOGE("Rx mgmt frame length mismatch, discard it");
-		return QDF_STATUS_E_INVAL;
-	}
+    if (ev_hdr->buf_len > param_tlvs->num_bufp) {
+        wmi_err("Rx mgmt frame length mismatch, discard it");
+        return QDF_STATUS_E_INVAL;
+    }
 
 	hdr->pdev_id = wmi_handle->ops->convert_pdev_id_target_to_host(
 							wmi_handle,
@@ -9492,12 +9480,12 @@ static QDF_STATUS extract_unit_test_tlv(wmi_unified_t wmi_handle,
 	unit_test->diag_token = ev_param->diag_token;
 	unit_test->flag = ev_param->flag;
 	unit_test->payload_len = ev_param->payload_len;
-	wmi_debug("vdev_id:%d mod_id:%d diag_token:%d flag:%d",
+	WMI_LOGI("%s:vdev_id:%d mod_id:%d diag_token:%d flag:%d", __func__,
 			ev_param->vdev_id,
 			ev_param->module_id,
 			ev_param->diag_token,
 			ev_param->flag);
-	wmi_debug("Unit-test data given below %d", num_bufp);
+	WMI_LOGD("%s: Unit-test data given below %d", __func__, num_bufp);
 	qdf_trace_hex_dump(QDF_MODULE_ID_WMI, QDF_TRACE_LEVEL_DEBUG,
 			bufp, num_bufp);
 	copy_size = (num_bufp < maxspace) ? num_bufp : maxspace;
@@ -10618,7 +10606,7 @@ static QDF_STATUS validate_dbr_ring_caps_idx(uint8_t idx,
 {
 	/* If dma_ring_caps is populated, num_dbr_ring_caps is non-zero */
 	if (!num_dma_ring_caps) {
-		wmi_err("dma_ring_caps %d", num_dma_ring_caps);
+		WMI_LOGI("%s: dma_ring_caps %d", __func__, num_dma_ring_caps);
 		return QDF_STATUS_E_INVAL;
 	}
 	if (idx >= num_dma_ring_caps) {
@@ -10898,7 +10886,7 @@ static QDF_STATUS extract_fips_event_data_tlv(wmi_unified_t wmi_handle,
 
 	if (event->data_len > param_buf->num_data)
 		return QDF_STATUS_E_FAILURE;
-
+	
 	if (fips_conv_data_be(event->data_len, param_buf->data) !=
 							QDF_STATUS_SUCCESS)
 		return QDF_STATUS_E_FAILURE;
@@ -11362,7 +11350,7 @@ static QDF_STATUS extract_dfs_radar_detection_event_tlv(
 	radar_found->freq_offset = radar_event->freq_offset;
 	radar_found->sidx = radar_event->sidx;
 
-	wmi_info("processed radar found event pdev %d,"
+	WMI_LOGI("processed radar found event pdev %d,"
 		"Radar Event Info:pdev_id %d,timestamp %d,chan_freq  (dur) %d,"
 		"chan_width (RSSI) %d,detector_id (false_radar) %d,"
 		"freq_offset (radar_check) %d,segment_id %d,sidx %d,"
@@ -12817,6 +12805,7 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 	case WMI_ROAM_TRIGGER_REASON_PER:
 	case WMI_ROAM_TRIGGER_REASON_BMISS:
 	case WMI_ROAM_TRIGGER_REASON_HIGH_RSSI:
+	case WMI_ROAM_TRIGGER_REASON_PERIODIC:
 	case WMI_ROAM_TRIGGER_REASON_MAWC:
 	case WMI_ROAM_TRIGGER_REASON_DENSE:
 	case WMI_ROAM_TRIGGER_REASON_BACKGROUND:
@@ -12851,7 +12840,6 @@ extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 		trig->deauth_trig_data.reason = src_data->deauth_reason;
 		return QDF_STATUS_SUCCESS;
 
-	case WMI_ROAM_TRIGGER_REASON_PERIODIC:
 	case WMI_ROAM_TRIGGER_REASON_LOW_RSSI:
 		trig->rssi_trig_data.threshold = src_data->roam_rssi_threshold;
 		return QDF_STATUS_SUCCESS;
@@ -13072,42 +13060,6 @@ extract_roam_11kv_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 
 	return QDF_STATUS_SUCCESS;
 }
-
-/**
- * extract_roam_msg_info_tlv() - Extract the roam message info
- * from the WMI_ROAM_STATS_EVENTID
- * @wmi_handle: wmi handle
- * @evt_buf:    Pointer to the event buffer
- * @dst:        Pointer to destination structure to fill data
- * @idx:        TLV id
- */
-static QDF_STATUS
-extract_roam_msg_info_tlv(wmi_unified_t wmi_handle, void *evt_buf,
-			  struct wmi_roam_msg_info *dst, uint8_t idx)
-{
-	WMI_ROAM_STATS_EVENTID_param_tlvs *param_buf;
-	wmi_roam_msg_info *src_data = NULL;
-
-	param_buf = (WMI_ROAM_STATS_EVENTID_param_tlvs *)evt_buf;
-
-	if (!param_buf || !param_buf->roam_msg_info ||
-	    !param_buf->num_roam_msg_info ||
-	    idx >= param_buf->num_roam_msg_info) {
-		wmi_debug("Empty roam_msg_info param buf");
-		return QDF_STATUS_SUCCESS;
-	}
-
-	src_data = &param_buf->roam_msg_info[idx];
-
-	dst->present = true;
-	dst->timestamp = src_data->timestamp;
-	dst->msg_id = src_data->msg_id;
-	dst->msg_param1 = src_data->msg_param1;
-	dst->msg_param2 = src_data->msg_param2;
-
-	return QDF_STATUS_SUCCESS;
-}
-
 #else
 static inline QDF_STATUS
 extract_roam_trigger_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
@@ -13138,14 +13090,6 @@ extract_roam_scan_stats_tlv(wmi_unified_t wmi_handle, void *evt_buf,
 {
 	return QDF_STATUS_E_NOSUPPORT;
 }
-
-static inline QDF_STATUS
-extract_roam_msg_info_tlv(wmi_unified_t wmi_handle, void *evt_buf,
-			  struct wmi_roam_msg_info *dst, uint8_t idx)
-{
-	return QDF_STATUS_E_NOSUPPORT;
-}
-
 #endif
 
 #ifdef FEATURE_WLAN_TIME_SYNC_FTM
@@ -13246,7 +13190,7 @@ static QDF_STATUS extract_time_sync_ftm_start_stop_event_tlv(
 	param->mac_time = ((uint64_t)resp_event->mac_timer_u32 << 32) |
 			   resp_event->mac_timer_l32;
 
-	wmi_debug("FTM time sync time_interval %d, num_reads %d",
+	WMI_LOGI("%s: FTM time sync time_interval %d, num_reads %d", __func__,
 		 param->timer_interval, param->num_reads);
 
 	return QDF_STATUS_SUCCESS;
@@ -13276,6 +13220,9 @@ extract_time_sync_ftm_offset_event_tlv(wmi_unified_t wmi, void *buf,
 
 	param->vdev_id = resp_event->vdev_id;
 	param->num_qtime = param_buf->num_audio_sync_q_master_slave_times;
+	if (param->num_qtime > FTM_TIME_SYNC_QTIME_PAIR_MAX)
+		param->num_qtime = FTM_TIME_SYNC_QTIME_PAIR_MAX;
+
 	q_pair = param_buf->audio_sync_q_master_slave_times;
 	if (!q_pair) {
 		WMI_LOGE("Invalid q_master_slave_times buffer");
@@ -13293,50 +13240,6 @@ extract_time_sync_ftm_offset_event_tlv(wmi_unified_t wmi, void *buf,
 	return QDF_STATUS_SUCCESS;
 }
 #endif /* FEATURE_WLAN_TIME_SYNC_FTM */
-
-/**
- * extract_install_key_comp_event_tlv() - extract install key complete event tlv
- * @wmi_handle: wmi handle
- * @evt_buf: pointer to event buffer
- * @len: length of the event buffer
- * @param: Pointer to hold install key complete event param
- *
- * Return: QDF_STATUS_SUCCESS for success or error code
- */
-static QDF_STATUS
-extract_install_key_comp_event_tlv(wmi_unified_t wmi_handle,
-				   void *evt_buf, uint32_t len,
-				   struct wmi_install_key_comp_event *param)
-{
-	WMI_VDEV_INSTALL_KEY_COMPLETE_EVENTID_param_tlvs *param_buf;
-	wmi_vdev_install_key_complete_event_fixed_param *key_fp;
-
-	if (len < sizeof(*param_buf)) {
-		wmi_err("invalid event buf len %d", len);
-		return QDF_STATUS_E_INVAL;
-	}
-
-	param_buf = (WMI_VDEV_INSTALL_KEY_COMPLETE_EVENTID_param_tlvs *)evt_buf;
-	if (!param_buf) {
-		wmi_err("received null buf from target");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	key_fp = param_buf->fixed_param;
-	if (!key_fp) {
-		wmi_err("received null event data from target");
-		return QDF_STATUS_E_INVAL;
-	}
-
-	param->vdev_id = key_fp->vdev_id;
-	param->key_ix = key_fp->key_ix;
-	param->key_flags = key_fp->key_flags;
-	param->status = key_fp->status;
-	WMI_MAC_ADDR_TO_CHAR_ARRAY(&key_fp->peer_macaddr,
-				   param->peer_macaddr);
-
-	return QDF_STATUS_SUCCESS;
-}
 
 struct wmi_ops tlv_ops =  {
 	.send_vdev_create_cmd = send_vdev_create_cmd_tlv,
@@ -13652,7 +13555,6 @@ struct wmi_ops tlv_ops =  {
 	.extract_roam_scan_stats = extract_roam_scan_stats_tlv,
 	.extract_roam_result_stats = extract_roam_result_stats_tlv,
 	.extract_roam_11kv_stats = extract_roam_11kv_stats_tlv,
-	.extract_roam_msg_info = extract_roam_msg_info_tlv,
 
 #ifdef FEATURE_WLAN_TIME_SYNC_FTM
 	.send_wlan_time_sync_ftm_trigger_cmd = send_wlan_ts_ftm_trigger_cmd_tlv,
@@ -13663,7 +13565,6 @@ struct wmi_ops tlv_ops =  {
 					extract_time_sync_ftm_offset_event_tlv,
 #endif /* FEATURE_WLAN_TIME_SYNC_FTM */
 	.send_roam_scan_ch_list_req_cmd = send_roam_scan_ch_list_req_cmd_tlv,
-	.extract_install_key_comp_event = extract_install_key_comp_event_tlv,
 };
 
 /**
@@ -14381,7 +14282,6 @@ void wmi_tlv_attach(wmi_unified_t wmi_handle)
 	wmi_fwol_attach_tlv(wmi_handle);
 	wmi_vdev_attach_tlv(wmi_handle);
 	wmi_cfr_attach_tlv(wmi_handle);
-	wmi_gpio_attach_tlv(wmi_handle);
 }
 qdf_export_symbol(wmi_tlv_attach);
 

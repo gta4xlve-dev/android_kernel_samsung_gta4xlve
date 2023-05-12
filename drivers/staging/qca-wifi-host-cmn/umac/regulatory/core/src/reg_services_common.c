@@ -1102,7 +1102,7 @@ enum channel_enum reg_get_chan_enum(uint8_t chan_num)
 		if (channel_map[count].chan_num == chan_num)
 			return count;
 
-	reg_err_rl("invalid channel number %d", chan_num);
+	reg_err("invalid channel number %d", chan_num);
 
 	return INVALID_CHANNEL;
 }
@@ -3333,8 +3333,7 @@ static void reg_set_2g_channel_params_for_freq(struct wlan_objmgr_pdev *pdev,
 		reg_get_2g_bonded_channel_state_for_freq(pdev, oper_freq,
 							 sec_ch_2g_freq,
 							 ch_params->ch_width);
-		if ((chan_state == CHANNEL_STATE_ENABLE) ||
-		    (chan_state == CHANNEL_STATE_DFS)) {
+		if (chan_state == CHANNEL_STATE_ENABLE) {
 			if (ch_params->ch_width == CH_WIDTH_40MHZ) {
 				if (oper_freq < sec_ch_2g_freq)
 					ch_params->sec_ch_offset =

@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -28,9 +27,6 @@
 #include <reg_services_public_struct.h>
 #include <wmi_unified_param.h>
 #include <sir_api.h>
-
-#define OWE_TRANSITION_OUI_TYPE "\x50\x6f\x9a\x1c"
-#define OWE_TRANSITION_OUI_SIZE 4
 
 #define CFG_PMKID_MODES_OKC                        (0x1)
 #define CFG_PMKID_MODES_PMKSA_CACHING              (0x2)
@@ -1124,42 +1120,6 @@ struct wlan_mlme_chainmask {
 	bool enable_bt_chain_separation;
 };
 
-/**
- * enum wlan_mlme_ratemask_type: Type of PHY for ratemask
- * @WLAN_MLME_RATEMASK_TYPE_NO_MASK: no ratemask set
- * @WLAN_MLME_RATEMASK_TYPE_CCK: CCK/OFDM rate
- * @WLAN_MLEM_RATEMASK_TYPE_HT: HT rate
- * @WLAN_MLME_RATEMASK_TYPE_VHT: VHT rate
- * @WLAN_MLME_RATEMASK_TYPE_HE: HE rate
- *
- * This is used for 'type' values in wlan_mlme_ratemask
- */
-enum wlan_mlme_ratemask_type {
-	WLAN_MLME_RATEMASK_TYPE_NO_MASK  =  0,
-	WLAN_MLME_RATEMASK_TYPE_CCK      =  1,
-	WLAN_MLME_RATEMASK_TYPE_HT       =  2,
-	WLAN_MLME_RATEMASK_TYPE_VHT      =  3,
-	WLAN_MLME_RATEMASK_TYPE_HE       =  4,
-	/* keep this last */
-	WLAN_MLME_RATEMASK_TYPE_MAX,
-};
-
-/**
- * struct wlan_mlme_ratemask - ratemask config parameters
- * @type:       Type of PHY the mask to be applied
- * @lower32:    Lower 32 bits in the 1st 64-bit value
- * @higher32:   Higher 32 bits in the 1st 64-bit value
- * @lower32_2:  Lower 32 bits in the 2nd 64-bit value
- * @higher32_2: Higher 32 bits in the 2nd 64-bit value
- */
-struct wlan_mlme_ratemask {
-	enum wlan_mlme_ratemask_type type;
-	uint32_t lower32;
-	uint32_t higher32;
-	uint32_t lower32_2;
-	uint32_t higher32_2;
-};
-
 /* struct wlan_mlme_generic - Generic CFG config items
  *
  * @band_capability: HW Band Capability - Both or 2.4G only or 5G only
@@ -1202,8 +1162,8 @@ struct wlan_mlme_ratemask {
  * @sae_connect_retries: sae connect retry bitmask
  */
 struct wlan_mlme_generic {
-	uint32_t band_capability;
-	uint32_t band;
+	enum band_info band_capability;
+	enum band_info band;
 	uint8_t select_5ghz_margin;
 	uint8_t sub_20_chan_width;
 	uint8_t ito_repeat_count;
@@ -1336,7 +1296,6 @@ struct wlan_mlme_cfg_twt {
  * @is_override_ht20_40_24g: use channel bonding in 2.4 GHz
  * @obss_detection_offload_enabled:       Enable OBSS detection offload
  * @obss_color_collision_offload_enabled: Enable obss color collision
- * @bss_color_collision_det_sta: STA BSS color collision detection offload
  */
 struct wlan_mlme_obss_ht40 {
 	uint32_t active_dwelltime;
@@ -1349,7 +1308,6 @@ struct wlan_mlme_obss_ht40 {
 	bool is_override_ht20_40_24g;
 	bool obss_detection_offload_enabled;
 	bool obss_color_collision_offload_enabled;
-	bool bss_color_collision_det_sta;
 };
 
 /**
@@ -1414,7 +1372,6 @@ enum station_keepalive_method {
  * @dot11p_mode:                    Set 802.11p mode
  * @fils_max_chan_guard_time:       Set maximum channel guard time
  * @current_rssi:                   Current rssi
- * @deauth_retry_cnt:               Deauth retry count
  * @ignore_peer_erp_info:           Ignore peer infrormation
  * @sta_prefer_80mhz_over_160mhz:   Set Sta preference to connect in 80HZ/160HZ
  * @enable_5g_ebt:                  Set default 5G early beacon termination
@@ -1434,7 +1391,6 @@ struct wlan_mlme_sta_cfg {
 	enum dot11p_mode dot11p_mode;
 	uint8_t fils_max_chan_guard_time;
 	uint8_t current_rssi;
-	uint8_t deauth_retry_cnt;
 	bool ignore_peer_erp_info;
 	bool sta_prefer_80mhz_over_160mhz;
 	bool enable_5g_ebt;
@@ -1548,10 +1504,6 @@ struct bss_load_trigger {
  * @roam_bg_scan_bad_rssi_threshold:RSSI threshold for background roam
  * @roam_bg_scan_client_bitmap:     Bitmap used to identify the scan clients
  * @roam_bg_scan_bad_rssi_offset_2g:RSSI threshold offset for 2G to 5G roam
- * @roam_data_rssi_threshold_triggers: triggers of bad data RSSI threshold to
- *                                  roam
- * @roam_data_rssi_threshold: Bad data RSSI threshold to roam
- * @rx_data_inactivity_time: Rx duration to check data RSSI
  * @adaptive_roamscan_dwell_mode:   Sets dwell time adaptive mode
  * @per_roam_enable:                To enabled/disable PER based roaming in FW
  * @per_roam_config_high_rate_th:   Rate at which PER based roam will stop
@@ -1662,9 +1614,6 @@ struct wlan_mlme_lfr_cfg {
 	uint32_t roam_bg_scan_bad_rssi_threshold;
 	uint32_t roam_bg_scan_client_bitmap;
 	uint32_t roam_bg_scan_bad_rssi_offset_2g;
-	uint32_t roam_data_rssi_threshold_triggers;
-	int32_t roam_data_rssi_threshold;
-	uint32_t rx_data_inactivity_time;
 	uint32_t adaptive_roamscan_dwell_mode;
 	uint32_t per_roam_enable;
 	uint32_t per_roam_config_high_rate_th;
@@ -2227,7 +2176,6 @@ struct wlan_mlme_btm {
  */
 struct wlan_mlme_fe_wlm {
 	bool latency_enable;
-	bool latency_reset;
 	uint8_t latency_level;
 	uint32_t latency_flags[MLME_NUM_WLM_LATENCY_LEVEL];
 };
@@ -2439,8 +2387,7 @@ struct wlan_mlme_cfg {
 	struct wlan_mlme_dot11_mode dot11_mode;
 	struct wlan_mlme_reg reg;
 	struct roam_trigger_score_delta trig_score_delta[NUM_OF_ROAM_TRIGGERS];
-	struct roam_trigger_min_rssi trig_min_rssi[NUM_OF_ROAM_MIN_RSSI];
-	struct wlan_mlme_ratemask ratemask_cfg;
+	struct roam_trigger_min_rssi trig_min_rssi[NUM_OF_ROAM_TRIGGERS];
 };
 
 enum pkt_origin {

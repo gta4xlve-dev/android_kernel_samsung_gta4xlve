@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2014-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -385,7 +384,6 @@ typedef bool (*qdf_irqlocked_func_t)(void *);
  * @QDF_MODULE_ID_FTM_TIME_SYNC: FTM Time sync module ID
  * @QDF_MODULE_ID_PKT_CAPTURE: PACKET CAPTURE module ID
  * @QDF_MODULE_ID_MON_FILTER: Monitor filter related config module ID
- * @QDF_MODULE_ID_GPIO: GPIO configuration module ID
  * @QDF_MODULE_ID_ANY: anything
  * @QDF_MODULE_ID_MAX: Max place holder module ID
  */
@@ -508,7 +506,6 @@ typedef enum {
 	QDF_MODULE_ID_FTM_TIME_SYNC,
 	QDF_MODULE_ID_PKT_CAPTURE,
 	QDF_MODULE_ID_MON_FILTER,
-	QDF_MODULE_ID_GPIO = 123,
 	QDF_MODULE_ID_ANY,
 	QDF_MODULE_ID_MAX,
 } QDF_MODULE_ID;
@@ -816,22 +813,8 @@ QDF_STATUS qdf_int64_parse(const char *int_str, int64_t *out_int);
 QDF_STATUS qdf_uint64_parse(const char *int_str, uint64_t *out_int);
 
 #define QDF_MAC_ADDR_SIZE 6
-
-/**
- * If the feature CONFIG_WLAN_TRACE_HIDE_MAC_ADDRESS is enabled,
- * then the requirement is to hide 2nd, 3rd and 4th octet of the
- * MAC address in the kernel logs and driver logs.
- * But other management interfaces like ioctl, debugfs, sysfs,
- * wext, unit test code or non-production simulator sw (iot_sim)
- * should continue to log the full mac address.
- *
- * Developers must use QDF_FULL_MAC_FMT instead of "%pM",
- * as this macro helps avoid accidentally breaking the feature
- * CONFIG_WLAN_TRACE_HIDE_MAC_ADDRESS if enabled and code auditing
- * becomes easy.
- */
-#define QDF_FULL_MAC_FMT "%pM"
-#define QDF_FULL_MAC_REF(a) (a)
+#define QDF_MAC_ADDR_STR "%02x:%02x:%02x:%02x:%02x:%02x"
+#define QDF_MAC_ADDR_ARRAY(a) (a)[0], (a)[1], (a)[2], (a)[3], (a)[4], (a)[5]
 
 #if defined(WLAN_TRACE_HIDE_MAC_ADDRESS)
 #define QDF_MAC_ADDR_FMT "%02x:**:**:**:%02x:%02x"
@@ -1038,22 +1021,6 @@ struct qdf_ipv6_addr {
  * Return: QDF_STATUS
  */
 QDF_STATUS qdf_ipv6_parse(const char *ipv6_str, struct qdf_ipv6_addr *out_addr);
-
-/**
- * qdf_uint32_array_parse() - parse the given string as uint32 array
- * @in_str: the input string to parse
- * @out_array: the output uint32 array, populated on success
- * @array_size: size of the array
- * @out_size: size of the populated array
- *
- * This API is called to convert string (each value separated by
- * a comma) into an uint32 array
- *
- * Return: QDF_STATUS
- */
-
-QDF_STATUS qdf_uint32_array_parse(const char *in_str, uint32_t *out_array,
-				  qdf_size_t array_size, qdf_size_t *out_size);
 
 /**
  * qdf_uint16_array_parse() - parse the given string as uint16 array
@@ -1333,7 +1300,6 @@ enum qdf_suspend_type {
  * @QDF_WMI_BUF_SEQUENCE_MISMATCH: WMI Tx completion buffer sequence mismatch
  * @QDF_HAL_REG_WRITE_FAILURE: HAL register writing failures
  * @QDF_SUSPEND_NO_CREDIT: host lack of credit after suspend
- * @QCA_HANG_BUS_FAILURE: Bus failure
  */
 enum qdf_hang_reason {
 	QDF_REASON_UNSPECIFIED,
@@ -1359,7 +1325,6 @@ enum qdf_hang_reason {
 	QDF_WMI_BUF_SEQUENCE_MISMATCH,
 	QDF_HAL_REG_WRITE_FAILURE,
 	QDF_SUSPEND_NO_CREDIT,
-	QCA_HANG_BUS_FAILURE,
 };
 
 /**

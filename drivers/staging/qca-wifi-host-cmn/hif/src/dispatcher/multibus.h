@@ -60,7 +60,6 @@ struct hif_bus_ops {
 	void (*hif_irq_enable)(struct hif_softc *hif_sc, int ce_id);
 	int (*hif_grp_irq_configure)(struct hif_softc *hif_sc,
 				     struct hif_exec_context *exec);
-	void (*hif_grp_irq_deconfigure)(struct hif_softc *hif_sc);
 	int (*hif_dump_registers)(struct hif_softc *hif_sc);
 	void (*hif_dump_target_memory)(struct hif_softc *hif_sc,
 				       void *ramdump_base,
@@ -82,7 +81,7 @@ struct hif_bus_ops {
 	int (*hif_addr_in_boundary)(struct hif_softc *scn, uint32_t offset);
 	bool (*hif_needs_bmi)(struct hif_softc *hif_sc);
 	void (*hif_config_irq_affinity)(struct hif_softc *hif_sc);
-	bool (*hif_log_bus_info)(struct hif_softc *scn, uint8_t *data,
+	void (*hif_log_bus_info)(struct hif_softc *scn, uint8_t *data,
 				 unsigned int *offset);
 };
 
@@ -214,7 +213,6 @@ static inline int hif_sdio_get_context_size(void)
 
 int hif_grp_irq_configure(struct hif_softc *hif_sc,
 			  struct hif_exec_context *hif_exec);
-void hif_grp_irq_deconfigure(struct hif_softc *hif_sc);
 #ifdef HIF_USB
 QDF_STATUS hif_initialize_usb_ops(struct hif_bus_ops *bus_ops);
 int hif_usb_get_context_size(void);
@@ -253,16 +251,15 @@ void hif_config_irq_affinity(struct hif_softc *hif_sc);
  * @data: hang event data buffer
  * @offset: offset at which data needs to be written
  *
- * Return: true if bus_id is invalid else false
+ * Return:  None
  */
-bool hif_log_bus_info(struct hif_softc *scn, uint8_t *data,
+void hif_log_bus_info(struct hif_softc *scn, uint8_t *data,
 		      unsigned int *offset);
 #else
 static inline
-bool hif_log_bus_info(struct hif_softc *scn, uint8_t *data,
+void hif_log_bus_info(struct hif_softc *scn, uint8_t *data,
 		      unsigned int *offset)
 {
-	return false;
 }
 #endif
 #endif /* _MULTIBUS_H_ */

@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2012-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -45,7 +44,6 @@
 #include "wlan_hdd_sta_info.h"
 #include "cdp_txrx_host_stats.h"
 #include "cdp_txrx_misc.h"
-#include "wlan_hdd_object_manager.h"
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(4, 0, 0)) && !defined(WITH_BACKPORTS)
 #define HDD_INFO_SIGNAL                 STATION_INFO_SIGNAL
@@ -606,9 +604,9 @@ bool hdd_get_interface_info(struct hdd_adapter *adapter,
 		if ((eConnectionState_Associated ==
 		     sta_ctx->conn_info.conn_state) &&
 		    (!sta_ctx->conn_info.is_authenticated)) {
-			hdd_err("client " QDF_MAC_ADDR_FMT
+			hdd_err("client " QDF_MAC_ADDR_STR
 				" is in the middle of WPS/EAPOL exchange.",
-				QDF_MAC_ADDR_REF(adapter->mac_addr.bytes));
+				QDF_MAC_ADDR_ARRAY(adapter->mac_addr.bytes));
 			info->state = WIFI_AUTHENTICATING;
 		}
 		if (eConnectionState_Associated ==
@@ -757,14 +755,11 @@ hdd_link_layer_process_iface_stats(struct hdd_adapter *adapter,
 {
 	struct sk_buff *vendor_event;
 	struct hdd_context *hdd_ctx = WLAN_HDD_GET_CTX(adapter);
+	int status;
 
-	/*
-	 * There is no need for wlan_hdd_validate_context here. This is a NB
-	 * operation that will come with DSC synchronization. This ensures that
-	 * no driver transition will take place as long as this operation is
-	 * not complete. Thus the need to check validity of hdd_context is not
-	 * required.
-	 */
+	status = wlan_hdd_validate_context(hdd_ctx);
+	if (0 != status)
+		return;
 
 	/*
 	 * Allocate a size of 4096 for the interface stats comprising
@@ -1749,61 +1744,6 @@ __wlan_hdd_cfg80211_ll_stats_get(struct wiphy *wiphy,
 	return 0;
 }
 
-#ifdef WLAN_FEATURE_WMI_SEND_RECV_QMI
-/**
- * wlan_hdd_qmi_get_sync_resume() - Get operation to trigger RTPM
- * sync resume without WoW exit
- * @hdd_ctx: hdd context
- * @dev: device context
- *
- * Returns: 0 for success, non-zero for failure
- */
-static inline
-int wlan_hdd_qmi_get_sync_resume(struct hdd_context *hdd_ctx,
-				 struct device *dev)
-{
-	if (!hdd_ctx->config->is_qmi_stats_enabled) {
-		hdd_debug("periodic stats over qmi is disabled");
-		return 0;
-	}
-
-	return pld_qmi_send_get(dev);
-}
-
-/**
- * wlan_hdd_qmi_put_suspend() - Put operation to trigger RTPM suspend
- * without WoW entry
- * @hdd_ctx: hdd context
- * @dev: device context
- *
- * Returns: 0 for success, non-zero for failure
- */
-static inline
-int wlan_hdd_qmi_put_suspend(struct hdd_context *hdd_ctx,
-			     struct device *dev)
-{
-	if (!hdd_ctx->config->is_qmi_stats_enabled) {
-		hdd_debug("periodic stats over qmi is disabled");
-		return 0;
-	}
-
-	return pld_qmi_send_put(dev);
-}
-#else
-static inline
-int wlan_hdd_qmi_get_sync_resume(struct hdd_context *hdd_ctx,
-				 struct device *dev)
-{
-	return 0;
-}
-
-static inline int wlan_hdd_qmi_put_suspend(struct hdd_context *hdd_ctx,
-					   struct device *dev)
-{
-	return 0;
-}
-#endif /* end if of WLAN_FEATURE_WMI_SEND_RECV_QMI */
-
 /**
  * wlan_hdd_cfg80211_ll_stats_get() - get ll stats
  * @wiphy: Pointer to wiphy
@@ -1818,14 +1758,9 @@ int wlan_hdd_cfg80211_ll_stats_get(struct wiphy *wiphy,
 				   const void *data,
 				   int data_len)
 {
-	struct hdd_context *hdd_ctx = wiphy_priv(wiphy);
 	struct osif_vdev_sync *vdev_sync;
 	int errno;
 	qdf_device_t qdf_ctx = cds_get_context(QDF_MODULE_ID_QDF_DEVICE);
-
-	errno = wlan_hdd_validate_context(hdd_ctx);
-	if (0 != errno)
-		return -EINVAL;
 
 	if (!qdf_ctx)
 		return -EINVAL;
@@ -1834,13 +1769,13 @@ int wlan_hdd_cfg80211_ll_stats_get(struct wiphy *wiphy,
 	if (errno)
 		return errno;
 
-	errno = wlan_hdd_qmi_get_sync_resume(hdd_ctx, qdf_ctx->dev);
+	errno = pld_qmi_send_get(qdf_ctx->dev);
 	if (errno)
 		goto end;
 
 	errno = __wlan_hdd_cfg80211_ll_stats_get(wiphy, wdev, data, data_len);
 
-	wlan_hdd_qmi_put_suspend(hdd_ctx, qdf_ctx->dev);
+	pld_qmi_send_put(qdf_ctx->dev);
 
 end:
 	osif_vdev_sync_op_stop(vdev_sync);
@@ -4211,13 +4146,12 @@ static int wlan_hdd_get_station_remote(struct wiphy *wiphy,
 	if (status != 0)
 		return status;
 
-	hdd_debug("Peer "QDF_MAC_ADDR_FMT, QDF_MAC_ADDR_REF(mac));
+	hdd_debug("Peer %pM", mac);
 
 	stainfo = hdd_get_sta_info_by_mac(&adapter->sta_info_list, mac,
 					  STA_INFO_WLAN_HDD_GET_STATION_REMOTE);
 	if (!stainfo) {
-		hdd_err("peer "QDF_MAC_ADDR_FMT" not found",
-			QDF_MAC_ADDR_REF(mac));
+		hdd_err("peer %pM not found", mac);
 		return -EINVAL;
 	}
 
@@ -4373,7 +4307,7 @@ bool hdd_report_max_rate(mac_handle_t mac_handle,
 			 uint8_t mcs_index,
 			 uint16_t fw_rate, uint8_t nss)
 {
-	uint8_t i, j, rssidx = 0;
+	uint8_t i, j, rssidx;
 	uint16_t max_rate = 0;
 	uint32_t vht_mcs_map;
 	bool is_vht20_mcs9 = false;
@@ -4408,7 +4342,12 @@ bool hdd_report_max_rate(mac_handle_t mac_handle,
 				       &link_speed_rssi_low,
 				       &link_speed_rssi_report);
 
-	if (ucfg_mlme_stats_is_link_speed_report_max_scaled(hdd_ctx->psoc)) {
+	/* we do not want to necessarily report the current speed */
+	if (ucfg_mlme_stats_is_link_speed_report_max(hdd_ctx->psoc)) {
+		/* report the max possible speed */
+		rssidx = 0;
+	} else if (ucfg_mlme_stats_is_link_speed_report_max_scaled(
+				hdd_ctx->psoc)) {
 		/* report the max possible speed with RSSI scaling */
 		if (signal >= link_speed_rssi_high) {
 			/* report the max possible speed */
@@ -4423,7 +4362,14 @@ bool hdd_report_max_rate(mac_handle_t mac_handle,
 			/* report actual speed */
 			rssidx = 3;
 		}
+	} else {
+		/* unknown, treat as eHDD_LINK_SPEED_REPORT_MAX */
+		hdd_err("Invalid value for reportMaxLinkSpeed: %u",
+			link_speed_rssi_report);
+		rssidx = 0;
 	}
+
+	max_rate = 0;
 
 	/* Get Basic Rate Set */
 	if (0 != ucfg_mlme_get_opr_rate_set(hdd_ctx->psoc,
@@ -4600,9 +4546,8 @@ bool hdd_report_max_rate(mac_handle_t mac_handle,
 	if ((max_rate < fw_rate) || (0 == max_rate)) {
 		max_rate = fw_rate;
 	}
-	hdd_debug("RLMS %u, rate_flags 0x%x, max_rate %d mcs %d nss %d",
-		  link_speed_rssi_report, rate_flags,
-		  max_rate, max_mcs_idx, nss);
+	hdd_debug("rate_flags 0x%x, max_rate %d mcs %d nss %d",
+		  rate_flags, max_rate, max_mcs_idx, nss);
 	wlan_hdd_fill_os_rate_info(rate_flags, max_rate, rate,
 				   max_mcs_idx, nss, 0, 0);
 
@@ -4698,20 +4643,32 @@ static void hdd_fill_fcs_and_mpdu_count(struct hdd_adapter *adapter,
 }
 #endif
 
-void hdd_check_and_update_nss(struct hdd_context *hdd_ctx,
-			      uint8_t *tx_nss, uint8_t *rx_nss)
+/**
+ * hdd_check_and_update_nss() - Check and update NSS as per DBS capability
+ * @hdd_ctx: HDD Context pointer
+ * @tx_nss: pointer to variable storing the tx_nss
+ * @rx_nss: pointer to variable storing the rx_nss
+ *
+ * The parameters include the NSS obtained from the FW or static NSS. This NSS
+ * could be invalid in the case the current HW mode is DBS where the connection
+ * are 1x1. Rectify these NSS values as per the current HW mode.
+ *
+ * Return: none
+ */
+static void hdd_check_and_update_nss(struct hdd_context *hdd_ctx,
+				     uint8_t *tx_nss, uint8_t *rx_nss)
 {
-	if (tx_nss && (*tx_nss > 1) &&
+	if ((*tx_nss > 1) &&
 	    policy_mgr_is_current_hwmode_dbs(hdd_ctx->psoc) &&
 	    !policy_mgr_is_hw_dbs_2x2_capable(hdd_ctx->psoc)) {
 		hdd_debug("Hw mode is DBS, Reduce tx nss(%d) to 1", *tx_nss);
 		(*tx_nss)--;
 	}
 
-	if (rx_nss && (*rx_nss > 1) &&
+	if ((*rx_nss > 1) &&
 	    policy_mgr_is_current_hwmode_dbs(hdd_ctx->psoc) &&
 	    !policy_mgr_is_hw_dbs_2x2_capable(hdd_ctx->psoc)) {
-		hdd_debug("Hw mode is DBS, Reduce rx nss(%d) to 1", *rx_nss);
+		hdd_debug("Hw mode is DBS, Reduce tx nss(%d) to 1", *rx_nss);
 		(*rx_nss)--;
 	}
 }
@@ -5042,13 +4999,13 @@ static int _wlan_hdd_cfg80211_get_station(struct wiphy *wiphy,
 	if (!qdf_ctx)
 		return -EINVAL;
 
-	errno = wlan_hdd_qmi_get_sync_resume(hdd_ctx, qdf_ctx->dev);
+	errno = pld_qmi_send_get(qdf_ctx->dev);
 	if (errno)
 		return errno;
 
 	errno = __wlan_hdd_cfg80211_get_station(wiphy, dev, mac, sinfo);
 
-	wlan_hdd_qmi_put_suspend(hdd_ctx, qdf_ctx->dev);
+	pld_qmi_send_put(qdf_ctx->dev);
 
 	return errno;
 }
@@ -5604,9 +5561,7 @@ QDF_STATUS wlan_hdd_get_mib_stats(struct hdd_adapter *adapter)
 		return ret;
 	}
 
-#ifdef WLAN_DEBUGFS
 	hdd_debugfs_process_mib_stats(adapter, stats);
-#endif
 
 	wlan_cfg80211_mc_cp_stats_free_stats_event(stats);
 	return ret;
@@ -6012,17 +5967,12 @@ int wlan_hdd_get_station_stats(struct hdd_adapter *adapter)
 	struct stats_event *stats;
 	struct wlan_mlme_nss_chains *dynamic_cfg;
 	uint32_t tx_nss, rx_nss;
-	struct wlan_objmgr_vdev *vdev;
 
-	vdev = hdd_objmgr_get_vdev(adapter);
-	if (!vdev)
-		return -EINVAL;
-
-	stats = wlan_cfg80211_mc_cp_stats_get_station_stats(vdev,
+	stats = wlan_cfg80211_mc_cp_stats_get_station_stats(adapter->vdev,
 							    &ret);
 	if (ret || !stats) {
 		wlan_cfg80211_mc_cp_stats_free_stats_event(stats);
-		goto out;
+		return ret;
 	}
 
 	/* save summary stats to legacy location */
@@ -6063,12 +6013,11 @@ int wlan_hdd_get_station_stats(struct hdd_adapter *adapter)
 	adapter->hdd_stats.peer_stats.fcs_count =
 		stats->peer_adv_stats->fcs_count;
 
-	dynamic_cfg = mlme_get_dynamic_vdev_config(vdev);
+	dynamic_cfg = mlme_get_dynamic_vdev_config(adapter->vdev);
 	if (!dynamic_cfg) {
 		hdd_err("nss chain dynamic config NULL");
 		wlan_cfg80211_mc_cp_stats_free_stats_event(stats);
-		ret = -EINVAL;
-		goto out;
+		return -EINVAL;
 	}
 
 	switch (hdd_conn_get_connected_band(&adapter->session.station)) {
@@ -6081,15 +6030,15 @@ int wlan_hdd_get_station_stats(struct hdd_adapter *adapter)
 		rx_nss = dynamic_cfg->rx_nss[NSS_CHAINS_BAND_5GHZ];
 		break;
 	default:
-		tx_nss = wlan_vdev_mlme_get_nss(vdev);
-		rx_nss = wlan_vdev_mlme_get_nss(vdev);
+		tx_nss = wlan_vdev_mlme_get_nss(adapter->vdev);
+		rx_nss = wlan_vdev_mlme_get_nss(adapter->vdev);
 	}
 	/* Intersection of self and AP's NSS capability */
-	if (tx_nss > wlan_vdev_mlme_get_nss(vdev))
-		tx_nss = wlan_vdev_mlme_get_nss(vdev);
+	if (tx_nss > wlan_vdev_mlme_get_nss(adapter->vdev))
+		tx_nss = wlan_vdev_mlme_get_nss(adapter->vdev);
 
-	if (rx_nss > wlan_vdev_mlme_get_nss(vdev))
-		rx_nss = wlan_vdev_mlme_get_nss(vdev);
+	if (rx_nss > wlan_vdev_mlme_get_nss(adapter->vdev))
+		rx_nss = wlan_vdev_mlme_get_nss(adapter->vdev);
 
 	/* save class a stats to legacy location */
 	adapter->hdd_stats.class_a_stat.tx_nss = tx_nss;
@@ -6119,9 +6068,7 @@ int wlan_hdd_get_station_stats(struct hdd_adapter *adapter)
 		     sizeof(stats->vdev_chain_rssi[0].chain_rssi));
 	wlan_cfg80211_mc_cp_stats_free_stats_event(stats);
 
-out:
-	hdd_objmgr_put_vdev(vdev);
-	return ret;
+	return 0;
 }
 
 struct temperature_priv {
@@ -6213,15 +6160,13 @@ int wlan_hdd_get_temperature(struct hdd_adapter *adapter, int *temperature)
 
 void wlan_hdd_display_txrx_stats(struct hdd_context *ctx)
 {
-	struct hdd_adapter *adapter = NULL, *next_adapter = NULL;
+	struct hdd_adapter *adapter = NULL;
 	struct hdd_tx_rx_stats *stats;
 	int i = 0;
 	uint32_t total_rx_pkt, total_rx_dropped,
 		 total_rx_delv, total_rx_refused;
-	wlan_net_dev_ref_dbgid dbgid = NET_DEV_HOLD_CACHE_STATION_STATS_CB;
 
-	hdd_for_each_adapter_dev_held_safe(ctx, adapter, next_adapter,
-					   dbgid) {
+	hdd_for_each_adapter_dev_held(ctx, adapter) {
 		total_rx_pkt = 0;
 		total_rx_dropped = 0;
 		total_rx_delv = 0;
@@ -6229,7 +6174,7 @@ void wlan_hdd_display_txrx_stats(struct hdd_context *ctx)
 		stats = &adapter->hdd_stats.tx_rx_stats;
 
 		if (adapter->vdev_id == INVAL_VDEV_ID) {
-			hdd_adapter_dev_put_debug(adapter, dbgid);
+			dev_put(adapter->dev);
 			continue;
 		}
 
@@ -6242,7 +6187,7 @@ void wlan_hdd_display_txrx_stats(struct hdd_context *ctx)
 		}
 
 		/* dev_put has to be done here */
-		hdd_adapter_dev_put_debug(adapter, dbgid);
+		dev_put(adapter->dev);
 
 		hdd_debug("TX - called %u, dropped %u orphan %u",
 			  stats->tx_called, stats->tx_dropped,
@@ -6300,9 +6245,9 @@ static void hdd_lost_link_cp_stats_info_cb(void *stats_ev)
 		}
 		adapter->rssi_on_disconnect =
 					ev->vdev_summary_stats[i].stats.rssi;
-		hdd_debug("rssi %d for " QDF_MAC_ADDR_FMT,
+		hdd_debug("rssi %d for " QDF_MAC_ADDR_STR,
 			  adapter->rssi_on_disconnect,
-			  QDF_MAC_ADDR_REF(adapter->mac_addr.bytes));
+			  QDF_MAC_ADDR_ARRAY(adapter->mac_addr.bytes));
 	}
 }
 

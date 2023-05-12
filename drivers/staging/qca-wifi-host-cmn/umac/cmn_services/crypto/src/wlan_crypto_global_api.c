@@ -35,7 +35,6 @@
 #include "wlan_crypto_def_i.h"
 #include "wlan_crypto_param_handling_i.h"
 #include "wlan_crypto_obj_mgr_i.h"
-#include "wlan_crypto_main.h"
 #include <qdf_module.h>
 
 const struct wlan_crypto_cipher *wlan_crypto_cipher_ops[WLAN_CRYPTO_CIPHER_MAX];
@@ -2440,6 +2439,7 @@ QDF_STATUS wlan_crypto_wpaie_check(struct wlan_crypto_params *crypto_params,
 	 * version, mcast cipher, and 2 selector counts.
 	 * Other, variable-length data, must be checked separately.
 	 */
+	RESET_AUTHMODE(crypto_params);
 	SET_AUTHMODE(crypto_params, WLAN_CRYPTO_AUTH_WPA);
 
 	if (len < 14)
@@ -2454,6 +2454,7 @@ QDF_STATUS wlan_crypto_wpaie_check(struct wlan_crypto_params *crypto_params,
 	frm += 2, len -= 2;
 
 	/* multicast/group cipher */
+	RESET_MCAST_CIPHERS(crypto_params);
 	w = wlan_crypto_wpa_suite_to_cipher(frm);
 	if (w < 0)
 		return QDF_STATUS_E_INVAL;
@@ -2466,6 +2467,7 @@ QDF_STATUS wlan_crypto_wpaie_check(struct wlan_crypto_params *crypto_params,
 	if (len < n*4+2)
 		return QDF_STATUS_E_INVAL;
 
+	RESET_UCAST_CIPHERS(crypto_params);
 	for (; n > 0; n--) {
 		w = wlan_crypto_wpa_suite_to_cipher(frm);
 		if (w < 0)
@@ -2484,6 +2486,7 @@ QDF_STATUS wlan_crypto_wpaie_check(struct wlan_crypto_params *crypto_params,
 		return QDF_STATUS_E_INVAL;
 
 	w = 0;
+	RESET_KEY_MGMT(crypto_params);
 	for (; n > 0; n--) {
 		w = wlan_crypto_wpa_suite_to_keymgmt(frm);
 		if (w < 0)
@@ -2931,6 +2934,8 @@ add_rsn_caps:
 			WLAN_CRYPTO_ADDSHORT(frm, 1);
 			qdf_mem_copy(frm, pmksa->pmkid, PMKID_LEN);
 			frm += PMKID_LEN;
+		} else {
+			WLAN_CRYPTO_ADDSHORT(frm, 0);
 		}
 	}
 
@@ -3053,6 +3058,7 @@ QDF_STATUS wlan_crypto_wapiie_check(struct wlan_crypto_params *crypto_params,
 	 * version, mcast cipher, and 2 selector counts.
 	 * Other, variable-length data, must be checked separately.
 	 */
+	RESET_AUTHMODE(crypto_params);
 	SET_AUTHMODE(crypto_params, WLAN_CRYPTO_AUTH_WAPI);
 
 	if (len < WLAN_CRYPTO_WAPI_IE_LEN)
@@ -3071,6 +3077,7 @@ QDF_STATUS wlan_crypto_wapiie_check(struct wlan_crypto_params *crypto_params,
 	if (len < n*4+2)
 		return QDF_STATUS_E_INVAL;
 
+	RESET_KEY_MGMT(crypto_params);
 	for (; n > 0; n--) {
 		w = wlan_crypto_wapi_keymgmt(frm);
 		if (w < 0)
@@ -3086,6 +3093,7 @@ QDF_STATUS wlan_crypto_wapiie_check(struct wlan_crypto_params *crypto_params,
 	if (len < n*4+2)
 		return QDF_STATUS_E_INVAL;
 
+	RESET_UCAST_CIPHERS(crypto_params);
 	for (; n > 0; n--) {
 		w = wlan_crypto_wapi_suite_to_cipher(frm);
 		if (w < 0)
@@ -3098,6 +3106,7 @@ QDF_STATUS wlan_crypto_wapiie_check(struct wlan_crypto_params *crypto_params,
 		return QDF_STATUS_E_INVAL;
 
 	/* multicast/group cipher */
+	RESET_MCAST_CIPHERS(crypto_params);
 	w = wlan_crypto_wapi_suite_to_cipher(frm);
 
 	if (w < 0)
@@ -4060,6 +4069,7 @@ wlan_crypto_reset_prarams(struct wlan_crypto_params *params)
 	params->ucastcipherset = 0;
 	params->mcastcipherset = 0;
 	params->mgmtcipherset = 0;
+	params->cipher_caps = 0;
 	params->key_mgmt = 0;
 	params->rsn_caps = 0;
 }
@@ -4343,35 +4353,4 @@ void wlan_crypto_set_sae_single_pmk_bss_cap(struct wlan_objmgr_vdev *vdev,
 }
 #endif
 
-void wlan_crypto_reset_vdev_params(struct wlan_objmgr_vdev *vdev)
-{
-	struct wlan_crypto_comp_priv *crypto_priv;
-
-	crypto_debug("reset params for vdev %d", wlan_vdev_get_id(vdev));
-	crypto_priv = (struct wlan_crypto_comp_priv *)
-		       wlan_get_vdev_crypto_obj(vdev);
-
-	if (!crypto_priv) {
-		crypto_err("crypto_priv NULL");
-		return;
-	}
-
-	wlan_crypto_reset_prarams(&crypto_priv->crypto_params);
-}
-
-QDF_STATUS wlan_crypto_psoc_enable(struct wlan_objmgr_psoc *psoc)
-{
-	if (psoc && WLAN_CRYPTO_TX_OPS_REGISTER_EVENTS(psoc))
-		return WLAN_CRYPTO_TX_OPS_REGISTER_EVENTS(psoc)(psoc);
-
-	return QDF_STATUS_E_FAILURE;
-}
-
-QDF_STATUS wlan_crypto_psoc_disable(struct wlan_objmgr_psoc *psoc)
-{
-	if (psoc && WLAN_CRYPTO_TX_OPS_DEREGISTER_EVENTS(psoc))
-		return WLAN_CRYPTO_TX_OPS_DEREGISTER_EVENTS(psoc)(psoc);
-
-	return QDF_STATUS_E_FAILURE;
-}
 #endif

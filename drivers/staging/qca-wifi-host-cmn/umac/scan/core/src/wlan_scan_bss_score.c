@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2017-2021 The Linux Foundation. All rights reserved.
- * Copyright (c) 2021 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2017-2020 The Linux Foundation. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -118,10 +117,10 @@ void scm_validate_scoring_config(struct scoring_config *score_cfg)
 		       score_cfg->weight_cfg.channel_congestion_weightage +
 		       score_cfg->weight_cfg.oce_wan_weightage;
 
-	if (total_weight > MAX_BSS_SCORE) {
+	if (total_weight > BEST_CANDIDATE_MAX_WEIGHT) {
 
 		scm_err("total weight is greater than %d fallback to default values",
-			MAX_BSS_SCORE);
+			BEST_CANDIDATE_MAX_WEIGHT);
 
 		score_cfg->weight_cfg.rssi_weightage = RSSI_WEIGHTAGE;
 		score_cfg->weight_cfg.ht_caps_weightage =
@@ -873,8 +872,7 @@ int scm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 		       score_config->cb_mode_5G, sta_nss);
 
 	scm_nofl_debug("Candidate("QDF_MAC_ADDR_FMT" freq %d): rssi %d HT %d VHT %d HE %d su bfer %d phy %d  air time frac %d qbss %d cong_pct %d NSS %d sae_pk_cap_present %d",
-		       QDF_MAC_ADDR_REF(entry->bssid.bytes),
-		       entry->channel.chan_freq,
+		       entry->bssid.bytes, entry->channel.chan_freq,
 		       entry->rssi_raw, util_scan_entry_htcap(entry) ? 1 : 0,
 		       util_scan_entry_vhtcap(entry) ? 1 : 0,
 		       util_scan_entry_hecap(entry) ? 1 : 0, ap_su_beam_former,
@@ -882,7 +880,7 @@ int scm_calculate_bss_score(struct wlan_objmgr_psoc *psoc,
 		       entry->qbss_chan_load, congestion_pct, entry->nss,
 		       sae_pk_cap_present);
 
-	scm_nofl_debug("Scores: prorated_pcnt %d rssi %d pcl %d ht %d vht %d he %d bfee %d bw %d band %d congestion %d nss %d oce wan %d sae_pk %d TOTAL %d",
+	scm_nofl_debug("Scores: prorated_pcnt %d rssi %d pcl %d ht %d vht %d he %d bfee %d bw %d band %d congestion %d nss %d oce wan %d TOTAL %d",
 		       prorated_pcnt, rssi_score, pcl_score, ht_score,
 		       vht_score, he_score, beamformee_score, bandwidth_score,
 		       band_score, congestion_score, nss_score, oce_wan_score,

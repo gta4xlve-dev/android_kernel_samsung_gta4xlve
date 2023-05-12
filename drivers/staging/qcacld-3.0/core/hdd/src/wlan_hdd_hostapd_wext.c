@@ -178,8 +178,8 @@ static int __iw_softap_set_two_ints_getnone(struct net_device *dev,
 			hdd_for_each_sta_ref(
 					adapter->sta_info_list, sta_info,
 					STA_INFO_SAP_SET_TWO_INTS_GETNONE) {
-				hdd_debug("bss_id: " QDF_MAC_ADDR_FMT,
-					  QDF_MAC_ADDR_REF(
+				hdd_debug("bss_id: " QDF_MAC_ADDR_STR,
+					  QDF_MAC_ADDR_ARRAY(
 					  sta_info->sta_mac.bytes));
 
 				req.peer_addr = (char *)
@@ -277,8 +277,8 @@ static void print_mac_list(struct qdf_mac_addr *macList, uint8_t size)
 
 	for (i = 0; i < size; i++) {
 		macArray = (macList + i)->bytes;
-		pr_info("ACL entry %i - "QDF_MAC_ADDR_FMT"\n",
-			i, QDF_MAC_ADDR_REF(macArray));
+		pr_info("ACL entry %i - "QDF_MAC_ADDR_STR"\n",
+			i, QDF_MAC_ADDR_ARRAY(macArray));
 	}
 }
 
@@ -897,7 +897,7 @@ static __iw_softap_setparam(struct net_device *dev,
 	case QCASAP_NSS_CMD:
 	{
 		hdd_debug("QCASAP_NSS_CMD val %d", set_value);
-		hdd_update_nss(adapter, set_value, set_value);
+		hdd_update_nss(adapter, set_value);
 		ret = wma_cli_set_command(adapter->vdev_id,
 					  WMI_VDEV_PARAM_NSS,
 					  set_value, VDEV_CMD);
@@ -1139,7 +1139,7 @@ static __iw_softap_getparam(struct net_device *dev,
 
 	switch (sub_cmd) {
 	case QCSAP_PARAM_MAX_ASSOC:
-		if (ucfg_mlme_get_assoc_sta_limit(hdd_ctx->psoc, value) !=
+		if (ucfg_mlme_set_assoc_sta_limit(hdd_ctx->psoc, *value) !=
 		    QDF_STATUS_SUCCESS) {
 			hdd_err("CFG_ASSOC_STA_LIMIT failed");
 			ret = -EIO;
@@ -1423,8 +1423,8 @@ int __iw_softap_modify_acl(struct net_device *dev,
 	i++;
 	cmd = (int)(*(value + i));
 
-	hdd_debug("Modify ACL mac:" QDF_MAC_ADDR_FMT " type: %d cmd: %d",
-	       QDF_MAC_ADDR_REF(peer_mac), list_type, cmd);
+	hdd_debug("Modify ACL mac:" QDF_MAC_ADDR_STR " type: %d cmd: %d",
+	       QDF_MAC_ADDR_ARRAY(peer_mac), list_type, cmd);
 
 	qdf_status = wlansap_modify_acl(
 		WLAN_HDD_GET_SAP_CTX_PTR(adapter),
@@ -1819,8 +1819,8 @@ static __iw_softap_disassoc_sta(struct net_device *dev,
 	 */
 	peer_macaddr = (uint8_t *) (extra);
 
-	hdd_debug("data " QDF_MAC_ADDR_FMT,
-		  QDF_MAC_ADDR_REF(peer_macaddr));
+	hdd_debug("data " QDF_MAC_ADDR_STR,
+		  QDF_MAC_ADDR_ARRAY(peer_macaddr));
 	wlansap_populate_del_sta_params(peer_macaddr,
 					eSIR_MAC_DEAUTH_LEAVING_BSS_REASON,
 					SIR_MAC_MGMT_DISASSOC,
@@ -1918,13 +1918,16 @@ static int iw_get_channel_list(struct net_device *dev,
 {
 	uint32_t num_channels = 0;
 	uint8_t i = 0;
+	uint8_t band_start_channel = MIN_24GHZ_CHANNEL;
+	uint8_t band_end_channel = MAX_5GHZ_CHANNEL;
 	struct hdd_adapter *hostapd_adapter = (netdev_priv(dev));
 	struct channel_list_info *channel_list =
-		(struct channel_list_info *)extra;
-	struct regulatory_channel *cur_chan_list = NULL;
+					(struct channel_list_info *) extra;
+	bool enable_dfs_scan = true;
+	enum band_info cur_band = BAND_ALL;
 	struct hdd_context *hdd_ctx;
 	int ret;
-	QDF_STATUS status;
+	bool is_dfs_mode_enabled = false;
 
 	hdd_enter_dev(dev);
 
@@ -1937,44 +1940,57 @@ static int iw_get_channel_list(struct net_device *dev,
 	if (0 != ret)
 		return ret;
 
-	cur_chan_list = qdf_mem_malloc(sizeof(*cur_chan_list) * NUM_CHANNELS);
-	if (!cur_chan_list)
-		return -ENOMEM;
-
-	status = ucfg_reg_get_current_chan_list(hdd_ctx->pdev, cur_chan_list);
-	if (status != QDF_STATUS_SUCCESS) {
-		hdd_err_rl("Failed to get the current channel list");
-		qdf_mem_free(cur_chan_list);
+	if (QDF_STATUS_SUCCESS != ucfg_reg_get_band(hdd_ctx->pdev, &cur_band)) {
+		hdd_err_rl("not able get the current frequency band");
 		return -EIO;
 	}
 
-	for (i = 0; i < NUM_CHANNELS; i++) {
-		/*
-		 * current channel list includes all channels. do not report
-		 * disabled channels
-		 */
-		if (cur_chan_list[i].chan_flags & REGULATORY_CHAN_DISABLED)
-			continue;
-
-		/*
-		 * do not include 6 GHz channels since they are ambiguous with
-		 * 2.4 GHz and 5 GHz channels. 6 GHz-aware applications should
-		 * not be using this interface, but instead should be using the
-		 * frequency-based interface
-		 */
-		if (wlan_reg_is_6ghz_chan_freq(cur_chan_list[i].center_freq))
-			continue;
-		channel_list->channels[num_channels] =
-						cur_chan_list[i].chan_num;
-		num_channels++;
-
+	if (BAND_2G == cur_band) {
+		band_start_channel = MIN_24GHZ_CHANNEL;
+		band_end_channel = MAX_24GHZ_CHANNEL;
+	} else if (BAND_5G == cur_band) {
+		band_start_channel = MIN_5GHZ_CHANNEL;
+		band_end_channel = MAX_5GHZ_CHANNEL;
 	}
 
-	qdf_mem_free(cur_chan_list);
+	if (cur_band != BAND_2G)
+		band_end_channel = MAX_5GHZ_CHANNEL;
+	ucfg_scan_cfg_get_dfs_chan_scan_allowed(hdd_ctx->psoc,
+						&enable_dfs_scan);
+	if (hostapd_adapter->device_mode == QDF_STA_MODE &&
+	    enable_dfs_scan) {
+		is_dfs_mode_enabled = true;
+	} else if (hostapd_adapter->device_mode == QDF_SAP_MODE) {
+		if (QDF_STATUS_SUCCESS != ucfg_mlme_get_dfs_master_capability(
+				hdd_ctx->psoc, &is_dfs_mode_enabled)) {
+			hdd_err_rl("Fail to get dfs master mode capability");
+			return -EINVAL;
+		}
+	}
+
+	hdd_debug_rl("curBand = %d, StartChannel = %hu, EndChannel = %hu, is_dfs_mode_enabled = %d",
+		     cur_band, band_start_channel, band_end_channel,
+		     is_dfs_mode_enabled);
+
+	for (i = band_start_channel; i <= band_end_channel; i++) {
+		if ((CHANNEL_STATE_ENABLE ==
+		     wlan_reg_get_channel_state(hdd_ctx->pdev,
+						WLAN_REG_CH_NUM(i))) ||
+		    (is_dfs_mode_enabled && CHANNEL_STATE_DFS ==
+		     wlan_reg_get_channel_state(hdd_ctx->pdev,
+						WLAN_REG_CH_NUM(i)))) {
+			channel_list->channels[num_channels] =
+						WLAN_REG_CH_NUM(i);
+			num_channels++;
+		}
+	}
+
 	hdd_debug_rl("number of channels %d", num_channels);
+
 	channel_list->num_channels = num_channels;
 	wrqu->data.length = num_channels + 1;
 	hdd_exit();
+
 	return 0;
 }
 
@@ -1989,8 +2005,9 @@ int iw_get_channel_list_with_cc(struct net_device *dev,
 	uint8_t ubuf[CFG_COUNTRY_CODE_LEN] = {0};
 	uint8_t ubuf_len = CFG_COUNTRY_CODE_LEN;
 	struct channel_list_info channel_list;
-	struct mac_context *mac = MAC_CONTEXT(mac_handle);
+
 	hdd_enter_dev(dev);
+
 	memset(&channel_list, 0, sizeof(channel_list));
 
 	if (0 != iw_get_channel_list(dev, info, wrqu, (char *)&channel_list)) {
@@ -2009,13 +2026,15 @@ int iw_get_channel_list_with_cc(struct net_device *dev,
 		return -EINVAL;
 	}
 	len = scnprintf(buf, WE_MAX_STR_LEN, "%u ", channel_list.num_channels);
-	ucfg_reg_get_cc_and_src(mac->psoc, ubuf);
-	/* Printing Country code in getChannelList */
-	for (i = 0; i < (ubuf_len - 1); i++)
-		len += scnprintf(buf + len, WE_MAX_STR_LEN - len, "%c", ubuf[i]);
-
+	if (QDF_STATUS_SUCCESS == sme_get_country_code(mac_handle, ubuf,
+						       &ubuf_len)) {
+		/* Printing Country code in getChannelList */
+		for (i = 0; i < (ubuf_len - 1); i++)
+			len += scnprintf(buf + len, WE_MAX_STR_LEN - len, "%c", ubuf[i]);
+	}
 	for (i = 0; i < channel_list.num_channels; i++)
 		len += scnprintf(buf + len, WE_MAX_STR_LEN - len, " %u", channel_list.channels[i]);
+
 	wrqu->data.length = strlen(extra) + 1;
 
 	hdd_exit();
@@ -2232,9 +2251,14 @@ static int hdd_softap_get_sta_info(struct hdd_adapter *adapter,
 		}
 
 		written += scnprintf(buf + written, size - written,
-				     QDF_FULL_MAC_FMT
+				     QDF_MAC_ADDR_STR
 				     " ecsa=%d\n",
-				     QDF_FULL_MAC_REF(sta->sta_mac.bytes),
+				     sta->sta_mac.bytes[0],
+				     sta->sta_mac.bytes[1],
+				     sta->sta_mac.bytes[2],
+				     sta->sta_mac.bytes[3],
+				     sta->sta_mac.bytes[4],
+				     sta->sta_mac.bytes[5],
 				     sta->ecsa_capable);
 		hdd_put_sta_info_ref(&adapter->sta_info_list, &sta, true,
 				     STA_INFO_SOFTAP_GET_STA_INFO);
@@ -2606,8 +2630,8 @@ __iw_get_peer_rssi(struct net_device *dev, struct iw_request_info *info,
 		wrqu->data.length +=
 			scnprintf(extra + wrqu->data.length,
 				  IW_PRIV_SIZE_MASK - wrqu->data.length,
-				  "["QDF_FULL_MAC_FMT"] [%d]\n",
-				  QDF_FULL_MAC_REF(rssi_info->peer_stats[i].peer_macaddr),
+				  "[%pM] [%d]\n",
+				  rssi_info->peer_stats[i].peer_macaddr,
 				  rssi_info->peer_stats[i].peer_rssi);
 
 	wrqu->data.length++;

@@ -763,11 +763,10 @@ send_update_tdls_peer_state_cmd_tlv(wmi_unified_t wmi_handle,
 
 	cmd->peer_state = peer_state->peer_state;
 
-	WMI_LOGD("%s: vdev_id: %d, peermac: "QDF_MAC_ADDR_FMT", "
+	WMI_LOGD("%s: vdev_id: %d, peermac: %pM, "
 		 "peer_macaddr.mac_addr31to0: 0x%x, "
 		 "peer_macaddr.mac_addr47to32: 0x%x, peer_state: %d",
-		 __func__, cmd->vdev_id,
-		 QDF_MAC_ADDR_REF(peer_state->peer_macaddr),
+		 __func__, cmd->vdev_id, peer_state->peer_macaddr,
 		 cmd->peer_macaddr.mac_addr31to0,
 		 cmd->peer_macaddr.mac_addr47to32, cmd->peer_state);
 
@@ -848,7 +847,7 @@ send_update_tdls_peer_state_cmd_tlv(wmi_unified_t wmi_handle,
 
 		if (in_chan_info->dfs_set) {
 			WMI_SET_CHANNEL_FLAG(chan_info, WMI_CHAN_FLAG_PASSIVE);
-			wmi_debug("chan[%d] DFS[%d]",
+			WMI_LOGI("chan[%d] DFS[%d]",
 				 in_chan_info->chan_id,
 				 in_chan_info->dfs_set);
 		}
@@ -972,9 +971,8 @@ static QDF_STATUS extract_vdev_tdls_ev_param_tlv(wmi_unified_t wmi_handle,
 		return QDF_STATUS_E_INVAL;
 	};
 
-	WMI_LOGD("%s: tdls event, peer: "QDF_MAC_ADDR_FMT", type: 0x%x, reason: %d, vdev: %d",
-		 __func__, QDF_MAC_ADDR_REF(param->peermac.bytes),
-		 param->message_type,
+	WMI_LOGD("%s: tdls event, peer: %pM, type: 0x%x, reason: %d, vdev: %d",
+		 __func__, param->peermac.bytes, param->message_type,
 		 param->peer_reason, param->vdev_id);
 
 	return QDF_STATUS_SUCCESS;
@@ -1392,17 +1390,17 @@ static QDF_STATUS extract_sar2_result_event_tlv(void *handle,
 		(WMI_SAR2_RESULT_EVENTID_param_tlvs *)event;
 
 	if (!param_buf) {
-		wmi_err("Invalid sar2 result event buffer");
+		WMI_LOGI("Invalid sar2 result event buffer");
 		return QDF_STATUS_E_INVAL;
 	}
 
 	sar2_fixed_param = param_buf->fixed_param;
 	if (!sar2_fixed_param) {
-		wmi_err("Invalid sar2 result event fixed param buffer");
+		WMI_LOGI("Invalid sar2 result event fixed param buffer");
 		return QDF_STATUS_E_INVAL;
 	}
 
-	wmi_debug("SAR2 result: %s",
+	WMI_LOGI("SAR2 result: %s",
 		 wmi_sar2_result_string(sar2_fixed_param->result));
 
 	return QDF_STATUS_SUCCESS;
@@ -2320,7 +2318,7 @@ static QDF_STATUS send_get_arp_stats_req_cmd_tlv(wmi_unified_t wmi_handle,
 	/* fill in arp stats req cmd values */
 	get_arp_stats->vdev_id = req_buf->vdev_id;
 
-	wmi_debug("vdev=%d", req_buf->vdev_id);
+	WMI_LOGI(FL("vdev=%d"), req_buf->vdev_id);
 	/* Send per roam config parameters */
 	wmi_mtrace(WMI_VDEV_GET_ARP_STAT_CMDID, NO_SESSION, 0);
 	status = wmi_unified_cmd_send(wmi_handle, buf,

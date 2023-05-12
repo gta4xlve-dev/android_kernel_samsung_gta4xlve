@@ -140,11 +140,6 @@ spectral_vdev_get_chan_freq(struct wlan_objmgr_vdev *vdev)
 		return -EINVAL;
 	}
 
-	if (!sc->legacy_cbacks.vdev_get_chan_freq) {
-		spectral_err("vdev_get_chan_freq is not supported");
-		return -ENOTSUPP;
-	}
-
 	return sc->legacy_cbacks.vdev_get_chan_freq(vdev);
 }
 
@@ -157,11 +152,6 @@ spectral_vdev_get_chan_freq_seg2(struct wlan_objmgr_vdev *vdev)
 	if (!sc) {
 		spectral_err("spectral context is null");
 		return -EINVAL;
-	}
-
-	if (!sc->legacy_cbacks.vdev_get_chan_freq_seg2) {
-		spectral_err("vdev_get_chan_freq_seg2 is not supported");
-		return -ENOTSUPP;
 	}
 
 	return sc->legacy_cbacks.vdev_get_chan_freq_seg2(vdev);
@@ -178,11 +168,6 @@ spectral_vdev_get_ch_width(struct wlan_objmgr_vdev *vdev)
 		return CH_WIDTH_INVALID;
 	}
 
-	if (!sc->legacy_cbacks.vdev_get_ch_width) {
-		spectral_err("vdev_get_ch_width is not supported");
-		return -ENOTSUPP;
-	}
-
 	return sc->legacy_cbacks.vdev_get_ch_width(vdev);
 }
 
@@ -196,11 +181,6 @@ spectral_vdev_get_sec20chan_freq_mhz(struct wlan_objmgr_vdev *vdev,
 	if (!sc) {
 		spectral_err("spectral context is Null");
 		return -EINVAL;
-	}
-
-	if (!sc->legacy_cbacks.vdev_get_sec20chan_freq_mhz) {
-		spectral_err("vdev_get_sec20chan_freq_mhz is not supported");
-		return -ENOTSUPP;
 	}
 
 	return sc->legacy_cbacks.vdev_get_sec20chan_freq_mhz(vdev,

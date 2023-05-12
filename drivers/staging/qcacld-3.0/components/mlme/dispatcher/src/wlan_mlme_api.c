@@ -187,7 +187,7 @@ QDF_STATUS wlan_mlme_set_ht_mpdu_density(struct wlan_objmgr_psoc *psoc,
 }
 
 QDF_STATUS wlan_mlme_get_band_capability(struct wlan_objmgr_psoc *psoc,
-					 uint32_t *band_capability)
+					 uint8_t *band_capability)
 {
 	struct wlan_mlme_psoc_ext_obj *mlme_obj;
 
@@ -201,7 +201,7 @@ QDF_STATUS wlan_mlme_get_band_capability(struct wlan_objmgr_psoc *psoc,
 }
 
 QDF_STATUS wlan_mlme_set_band_capability(struct wlan_objmgr_psoc *psoc,
-					 uint32_t band_capability)
+					 uint8_t band_capability)
 
 {
 	struct wlan_mlme_psoc_ext_obj *mlme_obj;
@@ -537,32 +537,6 @@ QDF_STATUS wlan_mlme_cfg_get_enable_ul_ofdm(struct wlan_objmgr_psoc *psoc,
 	return QDF_STATUS_SUCCESS;
 }
 
-/* mlme_get_min_rate_cap() - get minimum capability for HE-MCS between
- *                           ini value and fw capability.
- *
- * Rx HE-MCS Map and Tx HE-MCS Map subfields format where 2-bit indicates
- * 0 indicates support for HE-MCS 0-7 for n spatial streams
- * 1 indicates support for HE-MCS 0-9 for n spatial streams
- * 2 indicates support for HE-MCS 0-11 for n spatial streams
- * 3 indicates that n spatial streams is not supported for HE PPDUs
- *
- */
-static uint16_t mlme_get_min_rate_cap(uint16_t val1, uint16_t val2)
-{
-	uint16_t ret = 0, i;
-
-	for (i = 0; i < 8; i++) {
-		if (((val1 >> (2 * i)) & 0x3) == 0x3 ||
-		    ((val2 >> (2 * i)) & 0x3) == 0x3) {
-			ret |= 0x3 << (2 * i);
-			continue;
-		}
-		ret |= QDF_MIN((val1 >> (2 * i)) & 0x3,
-			      (val2 >> (2 * i)) & 0x3) << (2 * i);
-	}
-	return ret;
-}
-
 QDF_STATUS mlme_update_tgt_he_caps_in_cfg(struct wlan_objmgr_psoc *psoc,
 					  struct wma_tgt_cfg *wma_cfg)
 {
@@ -807,12 +781,8 @@ QDF_STATUS mlme_update_tgt_he_caps_in_cfg(struct wlan_objmgr_psoc *psoc,
 	mlme_obj->cfg.he_caps.dot11_he_cap.rx_full_bw_su_he_mu_non_cmpr_sigb =
 				he_cap->rx_full_bw_su_he_mu_non_cmpr_sigb;
 
-	tx_mcs_map = mlme_get_min_rate_cap(
-		mlme_obj->cfg.he_caps.dot11_he_cap.tx_he_mcs_map_lt_80,
-		he_cap->tx_he_mcs_map_lt_80);
-	rx_mcs_map = mlme_get_min_rate_cap(
-		mlme_obj->cfg.he_caps.dot11_he_cap.rx_he_mcs_map_lt_80,
-		he_cap->rx_he_mcs_map_lt_80);
+	tx_mcs_map = he_cap->tx_he_mcs_map_lt_80;
+	rx_mcs_map = he_cap->rx_he_mcs_map_lt_80;
 	if (!mlme_obj->cfg.vht_caps.vht_cap_info.enable2x2) {
 		nss = 2;
 		tx_mcs_map = HE_SET_MCS_4_NSS(tx_mcs_map, HE_MCS_DISABLE, nss);
@@ -825,12 +795,8 @@ QDF_STATUS mlme_update_tgt_he_caps_in_cfg(struct wlan_objmgr_psoc *psoc,
 	if (cfg_in_range(CFG_HE_TX_MCS_MAP_LT_80, tx_mcs_map))
 		mlme_obj->cfg.he_caps.dot11_he_cap.tx_he_mcs_map_lt_80 =
 			tx_mcs_map;
-	tx_mcs_map = mlme_get_min_rate_cap(
-	   *((uint16_t *)mlme_obj->cfg.he_caps.dot11_he_cap.tx_he_mcs_map_160),
-	   *((uint16_t *)he_cap->tx_he_mcs_map_160));
-	rx_mcs_map = mlme_get_min_rate_cap(
-	   *((uint16_t *)mlme_obj->cfg.he_caps.dot11_he_cap.rx_he_mcs_map_160),
-	   *((uint16_t *)he_cap->rx_he_mcs_map_160));
+	tx_mcs_map = *((uint16_t *)he_cap->tx_he_mcs_map_160);
+	rx_mcs_map = *((uint16_t *)he_cap->rx_he_mcs_map_160);
 
 	if (!mlme_obj->cfg.vht_caps.vht_cap_info.enable2x2) {
 		nss = 2;
@@ -1702,20 +1668,6 @@ QDF_STATUS wlan_mlme_set_assoc_sta_limit(struct wlan_objmgr_psoc *psoc,
 		mlme_obj->cfg.sap_cfg.assoc_sta_limit = value;
 	else
 		return QDF_STATUS_E_FAILURE;
-
-	return QDF_STATUS_SUCCESS;
-}
-
-QDF_STATUS wlan_mlme_get_assoc_sta_limit(struct wlan_objmgr_psoc *psoc,
-					 int *value)
-{
-	struct wlan_mlme_psoc_ext_obj *mlme_obj;
-
-	mlme_obj = mlme_get_psoc_ext_obj(psoc);
-	if (!mlme_obj)
-		return QDF_STATUS_E_FAILURE;
-
-	*value = mlme_obj->cfg.sap_cfg.assoc_sta_limit;
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -3262,11 +3214,8 @@ mlme_update_vht_cap(struct wlan_objmgr_psoc *psoc, struct wma_tgt_vht_cap *cfg)
 	if (vht_cap_info->short_gi_160mhz && !cfg->vht_short_gi_160)
 		vht_cap_info->short_gi_160mhz = cfg->vht_short_gi_160;
 
-	if (cfg_get(psoc, CFG_ENABLE_VHT_MCS_10_11))
-		vht_cap_info->vht_mcs_10_11_supp = cfg->vht_mcs_10_11_supp;
-
-	mlme_legacy_debug("vht_mcs_10_11_supp %d",
-			  vht_cap_info->vht_mcs_10_11_supp);
+	vht_cap_info->vht_mcs_10_11_supp = cfg->vht_mcs_10_11_supp;
+	mlme_legacy_debug(" vht_mcs_10_11_supp %d", cfg->vht_mcs_10_11_supp);
 
 	return QDF_STATUS_SUCCESS;
 }
@@ -3971,7 +3920,6 @@ bool wlan_mlme_get_peer_unmap_conf(struct wlan_objmgr_psoc *psoc)
 #define AUTH_INDEX 0
 #define MAX_RETRIES 2
 #define MAX_ROAM_AUTH_RETRIES 1
-#define MAX_AUTH_RETRIES 3
 
 QDF_STATUS
 wlan_mlme_get_sae_assoc_retry_count(struct wlan_objmgr_psoc *psoc,
@@ -4012,7 +3960,7 @@ wlan_mlme_get_sae_auth_retry_count(struct wlan_objmgr_psoc *psoc,
 		WLAN_GET_BITS(mlme_obj->cfg.gen.sae_connect_retries,
 			      AUTH_INDEX * NUM_RETRY_BITS, NUM_RETRY_BITS);
 
-	*retry_count = QDF_MIN(MAX_AUTH_RETRIES, *retry_count);
+	*retry_count = QDF_MIN(MAX_RETRIES, *retry_count);
 
 	return QDF_STATUS_SUCCESS;
 }

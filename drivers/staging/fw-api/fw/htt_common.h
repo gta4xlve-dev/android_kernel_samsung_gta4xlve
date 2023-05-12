@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2012-2016, 2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2012-2016 The Linux Foundation. All rights reserved.
  *
  * Previously licensed under the ISC license by Qualcomm Atheros, Inc.
  *
@@ -35,8 +34,6 @@
 #ifndef _HTT_COMMON_H_
 #define _HTT_COMMON_H_
 
-#include <htt_deps.h> /* A_UINT32 */
-
 enum htt_sec_type {
     htt_sec_type_none,
     htt_sec_type_wep128,
@@ -63,7 +60,7 @@ enum htt_rx_ind_mpdu_status {
     HTT_RX_IND_MPDU_STATUS_ERR_INV_PEER,
     HTT_RX_IND_MPDU_STATUS_UNAUTH_PEER, /* only accept EAPOL frames */
     HTT_RX_IND_MPDU_STATUS_OUT_OF_SYNC,
-    HTT_RX_IND_MPDU_STATUS_MGMT_CTRL, /* Non-data in promiscuous mode */
+    HTT_RX_IND_MPDU_STATUS_MGMT_CTRL, /* Non-data in promiscous mode */
     HTT_RX_IND_MPDU_STATUS_TKIP_MIC_ERR,
     HTT_RX_IND_MPDU_STATUS_DECRYPT_ERR,
     HTT_RX_IND_MPDU_STATUS_MPDU_LENGTH_ERR,
@@ -130,52 +127,5 @@ enum htt_pkt_type {
 #define TGT_RX2TX_MSDU_ID_SPACE_BEGIN 6000
 #define HTT_TX_IPA_NEW_MSDU_ID_SPACE_BEGIN  8192  /* = 0x2000 = b10,0000,0000,0000 */
 #define TGT_RX2TX_NEW_MSDU_ID_SPACE_BEGIN   12288 /* = 0x3000 = b11,0000,0000,0000 */
-
-/* HTT Access Category values */
-enum HTT_AC_WMM {
-    /* WMM Access Categories */
-    HTT_AC_WMM_BE         = 0x0,
-    HTT_AC_WMM_BK         = 0x1,
-    HTT_AC_WMM_VI         = 0x2,
-    HTT_AC_WMM_VO         = 0x3,
-
-    HTT_NUM_AC_WMM        = 0x4,
-
-    /* extension Access Categories */
-    HTT_AC_EXT_NON_QOS    = 0x4,
-    HTT_AC_EXT_UCAST_MGMT = 0x5,
-    HTT_AC_EXT_MCAST_DATA = 0x6,
-    HTT_AC_EXT_MCAST_MGMT = 0x7,
-};
-
-enum HTT_AC_WMM_MASK {
-    /* WMM Access Categories */
-    HTT_AC_WMM_BE_MASK = (1 << HTT_AC_WMM_BE),
-    HTT_AC_WMM_BK_MASK = (1 << HTT_AC_WMM_BK),
-    HTT_AC_WMM_VI_MASK = (1 << HTT_AC_WMM_VI),
-    HTT_AC_WMM_VO_MASK = (1 << HTT_AC_WMM_VO),
-    /* extension Access Categories */
-    HTT_AC_EXT_NON_QOS_MASK    = (1 << HTT_AC_EXT_NON_QOS),
-    HTT_AC_EXT_UCAST_MGMT_MASK = (1 << HTT_AC_EXT_UCAST_MGMT),
-    HTT_AC_EXT_MCAST_DATA_MASK = (1 << HTT_AC_EXT_MCAST_DATA),
-    HTT_AC_EXT_MCAST_MGMT_MASK = (1 << HTT_AC_EXT_MCAST_MGMT),
-};
-#define HTT_AC_MASK_WMM \
-    (HTT_AC_WMM_BE_MASK | HTT_AC_WMM_BK_MASK | \
-     HTT_AC_WMM_VI_MASK | HTT_AC_WMM_VO_MASK)
-#define HTT_AC_MASK_EXT \
-    (HTT_AC_EXT_NON_QOS_MASK | HTT_AC_EXT_UCAST_MGMT_MASK | \
-    HTT_AC_EXT_MCAST_DATA_MASK | HTT_AC_EXT_MCAST_MGMT_MASK)
-#define HTT_AC_MASK_ALL (HTT_AC_MASK_WMM | HTT_AC_MASK_EXT)
-
-/** 2 word representation of MAC addr */
-typedef struct {
-    /** upper 4 bytes of  MAC address */
-    A_UINT32 mac_addr31to0;
-    /** lower 2 bytes of  MAC address */
-    A_UINT32 mac_addr47to32;
-} htt_mac_addr;
-
-#define HTT_STATS_MAX_CHAINS 8
 
 #endif /* _HTT_COMMON_H_ */

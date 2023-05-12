@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  *
  * Permission to use, copy, modify, and/or distribute this software for
  * any purpose with or without fee is hereby granted, provided that the
@@ -134,8 +133,6 @@ struct wlan_srng_cfg {
  * @lro_enabled: enable/disable LRO feature
  * @sg_enabled: enable disable scatter gather feature
  * @gro_enabled: enable disable GRO feature
- * @tc_based_dynamic_gro: enable/disable tc based dynamic gro
- * @tc_ingress_prio: ingress prio to be checked for dynamic gro
  * @ipa_enabled: Flag indicating if IPA is enabled
  * @ol_tx_csum_enabled: Flag indicating if TX csum is enabled
  * @ol_rx_csum_enabled: Flag indicating if Rx csum is enabled
@@ -159,7 +156,6 @@ struct wlan_srng_cfg {
  * @rxdma_err_dst_ring: rxdma error detination ring size
  * @raw_mode_war: enable/disable raw mode war
  * @enable_data_stall_detection: flag to enable data stall detection
- * @enable_force_rx_64_ba: flag to enable force 64 blockack in RX
  * @disable_intra_bss_fwd: flag to disable intra bss forwarding
  * @rxdma1_enable: flag to indicate if rxdma1 is enabled
  * @tx_desc_limit_0: tx_desc limit for 5G H
@@ -187,9 +183,6 @@ struct wlan_srng_cfg {
  *                        5 tuple flow entry
  * @pktlog_buffer_size: packet log buffer size
  * @is_rx_fisa_enabled: flag to enable/disable FISA Rx
- * @rx_pending_high_threshold: threshold of starting pkt drop
- * @rx_pending_low_threshold: threshold of stopping pkt drop
- * @wow_check_rx_pending_enable: Enable RX frame pending check in WoW
  */
 struct wlan_cfg_dp_soc_ctxt {
 	int num_int_ctxts;
@@ -236,8 +229,6 @@ struct wlan_cfg_dp_soc_ctxt {
 	bool lro_enabled;
 	bool sg_enabled;
 	bool gro_enabled;
-	bool tc_based_dynamic_gro;
-	uint32_t tc_ingress_prio;
 	bool ipa_enabled;
 	bool ol_tx_csum_enabled;
 	bool ol_rx_csum_enabled;
@@ -267,7 +258,6 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint32_t per_pkt_trace;
 	bool raw_mode_war;
 	bool enable_data_stall_detection;
-	bool enable_force_rx_64_ba;
 	bool disable_intra_bss_fwd;
 	bool rxdma1_enable;
 	int max_ast_idx;
@@ -293,9 +283,6 @@ struct wlan_cfg_dp_soc_ctxt {
 	uint8_t *rx_toeplitz_hash_key;
 	uint8_t pktlog_buffer_size;
 	uint8_t is_rx_fisa_enabled;
-	uint32_t rx_pending_high_threshold;
-	uint32_t rx_pending_low_threshold;
-	bool wow_check_rx_pending_enable;
 };
 
 /**
@@ -850,24 +837,6 @@ int wlan_cfg_get_rx_dma_buf_ring_size(
 		struct wlan_cfg_dp_pdev_ctxt *wlan_cfg_pdev_ctx);
 
 /*
- * wlan_cfg_rx_pending_hl_threshold() - Return high threshold of rx pending
- * @wlan_cfg_pdev_ctx
- *
- * Return: rx_pending_high_threshold
- */
-uint32_t
-wlan_cfg_rx_pending_hl_threshold(struct wlan_cfg_dp_soc_ctxt *cfg);
-
-/*
- * wlan_cfg_rx_pending_lo_threshold() - Return low threshold of rx pending
- * @wlan_cfg_pdev_ctx
- *
- * Return: rx_pending_low_threshold
- */
-uint32_t
-wlan_cfg_rx_pending_lo_threshold(struct wlan_cfg_dp_soc_ctxt *cfg);
-
-/*
  * wlan_cfg_get_num_mac_rings() - Return the number of MAC RX DMA rings
  * per pdev
  * @wlan_cfg_pdev_ctx
@@ -1339,12 +1308,4 @@ void wlan_cfg_fill_interrupt_mask(struct wlan_cfg_dp_soc_ctxt *wlan_cfg_ctx,
  * Return: true if enabled, false otherwise.
  */
 bool wlan_cfg_is_rx_fisa_enabled(struct wlan_cfg_dp_soc_ctxt *cfg);
-
-/**
- * wlan_cfg_is_dp_force_rx_64_ba() - Get force use 64 BA flag
- * @cfg: config context
- *
- * Return: force use 64 BA flag
- */
-bool wlan_cfg_is_dp_force_rx_64_ba(struct wlan_cfg_dp_soc_ctxt *cfg);
 #endif
