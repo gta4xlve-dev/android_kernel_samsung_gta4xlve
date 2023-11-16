@@ -606,3 +606,7 @@ void wacom_disable_mode(struct wacom_i2c *wac_i2c, wacom_disable_mode_t mode);
 int wacom_check_ub(struct i2c_client *client);
 
 void wacom_swap_compensation(struct wacom_i2c *wac_i2c, char cmd);
+
+#ifdef CONFIG_TOUCHSCREEN_HIMAX_IC_HX83102
+extern bool himax_epen_mode;
+#endif
