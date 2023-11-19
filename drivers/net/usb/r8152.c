@@ -792,7 +792,7 @@ int get_registers(struct r8152 *tp, u16 value, u16 index, u16 size, void *data)
 
 	ret = usb_control_msg(tp->udev, usb_rcvctrlpipe(tp->udev, 0),
 			      RTL8152_REQ_GET_REGS, RTL8152_REQT_READ,
-			      value, index, tmp, size, 500);
+			      value, index, tmp, size, USB_CTRL_GET_TIMEOUT);
 	if (ret < 0)
 		memset(data, 0xff, size);
 	else
@@ -815,7 +815,7 @@ int set_registers(struct r8152 *tp, u16 value, u16 index, u16 size, void *data)
 
 	ret = usb_control_msg(tp->udev, usb_sndctrlpipe(tp->udev, 0),
 			      RTL8152_REQ_SET_REGS, RTL8152_REQT_WRITE,
-			      value, index, tmp, size, 500);
+			      value, index, tmp, size, USB_CTRL_SET_TIMEOUT);
 
 	kfree(tmp);
 
@@ -7268,6 +7268,66 @@ static int rtl_ops_init(struct r8152 *tp)
 	}
 
 	return ret;
+}
+
+static u8 rtl_get_version(struct usb_interface *intf)
+{
+	struct usb_device *udev = interface_to_usbdev(intf);
+	u32 ocp_data = 0;
+	__le32 *tmp;
+	u8 version;
+	int ret;
+
+	tmp = kmalloc(sizeof(*tmp), GFP_KERNEL);
+	if (!tmp)
+		return 0;
+
+	ret = usb_control_msg(udev, usb_rcvctrlpipe(udev, 0),
+			      RTL8152_REQ_GET_REGS, RTL8152_REQT_READ,
+			      PLA_TCR0, MCU_TYPE_PLA, tmp, sizeof(*tmp),
+			      USB_CTRL_GET_TIMEOUT);
+	if (ret > 0)
+		ocp_data = (__le32_to_cpu(*tmp) >> 16) & VERSION_MASK;
+
+	kfree(tmp);
+
+	switch (ocp_data) {
+	case 0x4c00:
+		version = RTL_VER_01;
+		break;
+	case 0x4c10:
+		version = RTL_VER_02;
+		break;
+	case 0x5c00:
+		version = RTL_VER_03;
+		break;
+	case 0x5c10:
+		version = RTL_VER_04;
+		break;
+	case 0x5c20:
+		version = RTL_VER_05;
+		break;
+	case 0x5c30:
+		version = RTL_VER_06;
+		break;
+	case 0x4800:
+		version = RTL_VER_07;
+		break;
+	case 0x6000:
+		version = RTL_VER_08;
+		break;
+	case 0x6010:
+		version = RTL_VER_09;
+		break;
+	default:
+		version = RTL_VER_UNKNOWN;
+		dev_info(&intf->dev, "Unknown version 0x%04x\n", ocp_data);
+		break;
+	}
+
+	dev_dbg(&intf->dev, "Detected version 0x%04x\n", version);
+
+	return version;
 }
 
 static int rtl8152_probe(struct usb_interface *intf,
