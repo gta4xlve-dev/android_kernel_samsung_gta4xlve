@@ -18,6 +18,10 @@
 #include "sde_kms.h"
 #include "sde_formats.h"
 
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+#include "ss_dsi_panel_common.h"
+#endif
+
 #define SDE_UBWC_META_MACRO_W_H		16
 #define SDE_UBWC_META_BLOCK_SIZE	256
 #define SDE_UBWC_PLANE_SIZE_ALIGNMENT	4096

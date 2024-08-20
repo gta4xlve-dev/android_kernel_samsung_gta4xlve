@@ -38,6 +38,11 @@
 #include "sde_color_processing.h"
 #include "sde_hw_rot.h"
 
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+#include "sde_encoder.h"
+#include "ss_dsi_panel_common.h"
+#endif
+
 #define SDE_DEBUG_PLANE(pl, fmt, ...) SDE_DEBUG("plane%d " fmt,\
 		(pl) ? (pl)->base.base.id : -1, ##__VA_ARGS__)
 

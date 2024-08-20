@@ -9,6 +9,15 @@ ccflags-y += -Idrivers/gpu/drm/msm/hdmi
 ccflags-$(CONFIG_DRM_SDE_SHD) += -Idrivers/gpu/drm/msm/shd
 ccflags-$(CONFIG_DRM_SDE_SHP) += -Idrivers/gpu/drm/msm/shp
 
+ifeq ($(CONFIG_DISPLAY_SAMSUNG_LEGO),y)
+ccflags-y += -I$(srctree)/include/drm
+ccflags-y += -I$(srctree)/drivers/gpu/drm/msm
+ccflags-y += -I$(srctree)/drivers/gpu/drm/msm/dsi-staging
+ccflags-y += -I$(srctree)/drivers/gpu/drm/msm/sde
+ccflags-y += -I$(srctree)/drivers/clk/qcom/
+ccflags-y += -I$(srctree)/drivers/gpu/drm/msm/samsung_lego
+endif
+
 msm_drm-y := \
 	dp/dp_usbpd.o \
 	dp/dp_parser.o \
@@ -220,3 +229,8 @@ msm_drm-$(CONFIG_DRM_MSM) += \
 	msm_debugfs.o
 
 obj-$(CONFIG_DRM_MSM)	+= msm_drm.o
+
+ifeq ($(CONFIG_DISPLAY_SAMSUNG_LEGO),y)
+obj-y += samsung_lego/
+endif
+
