@@ -1069,6 +1069,8 @@ static int cam_ife_csid_enable_hw(struct cam_ife_csid_hw  *csid_hw)
 	clk_lvl = cam_soc_util_get_vote_level(soc_info, csid_hw->clk_rate);
 	CAM_DBG(CAM_ISP, "CSID clock lvl %u", clk_lvl);
 
+	clk_lvl = CAM_TURBO_VOTE;
+
 	rc = cam_ife_csid_enable_soc_resources(soc_info, clk_lvl);
 	if (rc) {
 		CAM_ERR(CAM_ISP, "CSID:%d Enable SOC failed",
