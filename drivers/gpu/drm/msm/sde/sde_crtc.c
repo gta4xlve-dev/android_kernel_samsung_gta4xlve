@@ -3131,6 +3131,12 @@ static void _sde_crtc_set_input_fence_timeout(struct sde_crtc_state *cstate)
 	cstate->input_fence_timeout_ns =
 		sde_crtc_get_property(cstate, CRTC_PROP_INPUT_FENCE_TIMEOUT);
 	cstate->input_fence_timeout_ns *= NSEC_PER_MSEC;
+
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+	/* Increase fence timeout value to 20 sec (case 03381402 / P180412-02009) */
+	cstate->input_fence_timeout_ns *= 2;
+	pr_err("input_fence_timeout_ns %llu \n ", cstate->input_fence_timeout_ns);
+#endif
 }
 
 void _sde_crtc_clear_dim_layers_v1(struct drm_crtc_state *state)

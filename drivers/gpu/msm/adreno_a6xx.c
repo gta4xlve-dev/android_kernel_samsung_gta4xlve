@@ -775,6 +775,8 @@ static void a6xx_patch_pwrup_reglist(struct adreno_device *adreno_dev)
 	}
 }
 
+#define AHB_CNTL_VAL 0x1B0F
+
 /*
  * a6xx_start() - Device start
  * @adreno_dev: Pointer to adreno device
@@ -968,6 +970,12 @@ static void a6xx_start(struct adreno_device *adreno_dev)
 				A6XX_GMU_CX_GMU_POWER_COUNTER_SELECT_0,
 				0xff, 0x20);
 	kgsl_regwrite(device, A6XX_GMU_CX_GMU_POWER_COUNTER_ENABLE, 0x1);
+
+	adreno_cx_misc_regwrite(adreno_dev, A6XX_GPU_CX_MISC_CX_AHB_AON_CNTL, AHB_CNTL_VAL);
+	adreno_cx_misc_regwrite(adreno_dev, A6XX_GPU_CX_MISC_CX_AHB_GMU_CNTL, AHB_CNTL_VAL);
+	adreno_cx_misc_regwrite(adreno_dev, A6XX_GPU_CX_MISC_CX_AHB_CP_CNTL, AHB_CNTL_VAL);
+	adreno_cx_misc_regwrite(adreno_dev, A6XX_GPU_CX_MISC_CX_AHB_VBIF_SMMU_CNTL, AHB_CNTL_VAL);
+	adreno_cx_misc_regwrite(adreno_dev, A6XX_GPU_CX_MISC_CX_AHB_HOST_CNTL, AHB_CNTL_VAL);
 
 	a6xx_protect_init(adreno_dev);
 
