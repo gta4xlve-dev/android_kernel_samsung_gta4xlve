@@ -32,3 +32,6 @@ obj-$(CONFIG_INPUT_KEYCOMBO)	+= keycombo.o
 
 obj-$(CONFIG_RMI4_CORE)		+= rmi4/
 obj-$(CONFIG_SMI130)   += sensors/smi130/
+
+obj-$(CONFIG_EPEN_WACOM_WEZ01)	+= wacom/
+obj-$(CONFIG_EPEN_WACOM_W9019)	+= w9019/
