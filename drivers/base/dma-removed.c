@@ -273,4 +273,20 @@ static int __init removed_dma_setup(struct reserved_mem *rmem)
 	return 0;
 }
 RESERVEDMEM_OF_DECLARE(dma, "removed-dma-pool", removed_dma_setup);
+
+#ifdef CONFIG_CP_DYNAMIC_MEM_RESERVE
+static unsigned int reserve_mem_region;
+static int __init sec_reserved_mem_setup(char *str)
+{
+	get_option(&str, &reserve_mem_region);
+	return 1;
+}
+early_param("androidboot.reserve_mem_region", sec_reserved_mem_setup);
+
+unsigned int sec_reserved_mem(void)
+{
+	return reserve_mem_region;
+}
+EXPORT_SYMBOL(sec_reserved_mem);
+#endif
 #endif
