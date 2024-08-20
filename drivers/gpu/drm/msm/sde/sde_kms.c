@@ -53,6 +53,10 @@
 #define CREATE_TRACE_POINTS
 #include "sde_trace.h"
 
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+#include "ss_dsi_panel_debug.h"
+#endif
+
 /* defines for secure channel call */
 #define MEM_PROTECT_SD_CTRL_SWITCH 0x18
 #define MDP_DEVICE_ID            0x1A
@@ -1372,9 +1376,15 @@ static void _sde_kms_release_displays(struct sde_kms *sde_kms)
 	sde_kms->wb_displays = NULL;
 	sde_kms->wb_display_count = 0;
 
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+	sde_kms->dsi_display_count = 0;
+	kfree(sde_kms->dsi_displays);
+	sde_kms->dsi_displays = NULL;
+#else
 	kfree(sde_kms->dsi_displays);
 	sde_kms->dsi_displays = NULL;
 	sde_kms->dsi_display_count = 0;
+#endif
 }
 
 /**
@@ -1818,6 +1828,11 @@ void sde_kms_timeline_status(struct drm_device *dev)
 	mutex_unlock(&dev->mode_config.mutex);
 }
 
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+int sde_core_perf_sysfs_init(struct sde_kms *sde_kms);
+int sde_core_perf_sysfs_deinit(struct sde_kms *sde_kms);
+#endif
+
 static int sde_kms_postinit(struct msm_kms *kms)
 {
 	struct sde_kms *sde_kms = to_sde_kms(kms);
@@ -1835,6 +1850,12 @@ static int sde_kms_postinit(struct msm_kms *kms)
 	rc = _sde_debugfs_init(sde_kms);
 	if (rc)
 		SDE_ERROR("sde_debugfs init failed: %d\n", rc);
+
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+	rc = sde_core_perf_sysfs_init(sde_kms);
+	if (rc)
+		SDE_ERROR("sde_core_sysfs init failed: %d\n", rc);
+#endif
 
 	drm_for_each_crtc(crtc, dev)
 		sde_crtc_post_init(dev, crtc);
@@ -1887,6 +1908,9 @@ static void _sde_kms_hw_destroy(struct sde_kms *sde_kms,
 	/* safe to call these more than once during shutdown */
 	_sde_debugfs_destroy(sde_kms);
 	_sde_kms_mmu_destroy(sde_kms);
+#if defined(CONFIG_DISPLAY_SAMSUNG_LEGO)
+	sde_core_perf_sysfs_deinit(sde_kms);
+#endif
 
 	if (sde_kms->catalog) {
 		for (i = 0; i < sde_kms->catalog->vbif_count; i++) {
