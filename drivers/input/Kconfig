@@ -219,6 +219,8 @@ source "drivers/input/wacom/Kconfig"
 
 source "drivers/input/w9019/Kconfig"
 
+source "drivers/input/sec_input/Kconfig"
+
 endif
 
 menu "Hardware I/O ports"
