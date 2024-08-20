@@ -1,0 +1,15 @@
+#
+# Sec_Input device configuration
+#
+
+config SEC_DEBUG_TSP_LOG_LEGO
+	bool "SEC_DEBUG_TSP_LOG_LEGO"
+	help
+		Say Y here if you have a SEC_DEBUG_TSP_LOG_LEGO.
+		If unsure, say N.
+		
+config INPUT_SEC_INPUT_LEGO
+	bool "INPUT_SEC_INPUT_LEGO"
+	help
+		Say Y here if you have a INPUT_SEC_INPUT_LEGO.
+		If unsure, say N.
