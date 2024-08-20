@@ -41,6 +41,12 @@ static bool ramdump_event;
 static void *memshare_ramdump_dev[MAX_CLIENTS];
 static struct device *memshare_dev[MAX_CLIENTS];
 
+#ifdef CONFIG_CP_DYNAMIC_MEM_RESERVE
+extern int sec_reserved_mem(void);
+#define RESERVE_MEM_LEVEL1_MASK (1u << 2)
+#define RESERVE_MEM_LEVEL2_MASK (1u << 3)
+#endif
+
 /* Memshare Driver Structure */
 struct memshare_driver {
 	struct device *dev;
@@ -779,6 +785,9 @@ static int memshare_child_probe(struct platform_device *pdev)
 	uint32_t size, client_id;
 	const char *name;
 	struct memshare_child *drv;
+#ifdef CONFIG_CP_DYNAMIC_MEM_RESERVE
+	uint32_t reserve_mem_region, reserved_size;
+#endif
 
 	drv = devm_kzalloc(&pdev->dev, sizeof(struct memshare_child),
 							GFP_KERNEL);
@@ -826,9 +835,28 @@ static int memshare_child_probe(struct platform_device *pdev)
 		return rc;
 	}
 
-	if (strcmp(name, "modem") == 0)
+	if (strcmp(name, "modem") == 0) {
 		memblock[num_clients].peripheral = DHMS_MEM_PROC_MPSS_V01;
-	else if (strcmp(name, "adsp") == 0)
+#ifdef CONFIG_CP_DYNAMIC_MEM_RESERVE
+		if (client_id == DHMS_MEM_CLIENT_MODEM_V01) {
+			reserve_mem_region = sec_reserved_mem();
+			if (reserve_mem_region & RESERVE_MEM_LEVEL1_MASK) {
+				rc = of_property_read_u32(pdev->dev.of_node, "qcom,reserved-size",
+								&reserved_size);
+				if (rc) {
+					pr_err("memshare: %s, Error reading reserved size of clients, rc: %d\n",
+							__func__, rc);
+					return rc;
+				}
+
+				size += reserved_size;
+			} else if (!(reserve_mem_region & RESERVE_MEM_LEVEL2_MASK)) {
+				size = 0;
+			}
+			pr_err("memshare: client_id %d / size %x\n", client_id, size);
+		}
+#endif
+	} else if (strcmp(name, "adsp") == 0)
 		memblock[num_clients].peripheral = DHMS_MEM_PROC_ADSP_V01;
 	else if (strcmp(name, "wcnss") == 0)
 		memblock[num_clients].peripheral = DHMS_MEM_PROC_WCNSS_V01;
