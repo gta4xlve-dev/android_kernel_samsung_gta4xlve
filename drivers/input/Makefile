@@ -35,3 +35,4 @@ obj-$(CONFIG_SMI130)   += sensors/smi130/
 
 obj-$(CONFIG_EPEN_WACOM_WEZ01)	+= wacom/
 obj-$(CONFIG_EPEN_WACOM_W9019)	+= w9019/
+obj-$(CONFIG_INPUT_SEC_INPUT_LEGO)	+= sec_input/
