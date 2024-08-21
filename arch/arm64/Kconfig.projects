@@ -1,0 +1,11 @@
+config SEC_GTA4XLVE_PROJECT
+	default n
+	bool "Samsung GTA4XLVE Project"
+	help
+	  Support for Samsung GTA4XLVE Project
+
+config SEC_GTA4XLVE_EUR_OPEN
+	default n
+	bool "Samsung GTA4XLVE EUR OPEN"
+	help
+	  Support for Samsung GTA4XLVE EUR OPEN device.
