@@ -191,3 +191,6 @@ obj-$(CONFIG_ESOC)              += esoc/
 # GNSS driver
 obj-$(CONFIG_GNSS_SIRF)		+= gnsssirf/
 obj-$(CONFIG_GNSS)		+= gnss/
+
+obj-$(CONFIG_USE_MUIC)		+= muic/
+obj-$(CONFIG_BATTERY_SAMSUNG_LEGO_STYLE)	+= battery/
