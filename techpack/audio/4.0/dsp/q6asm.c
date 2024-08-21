@@ -258,6 +258,13 @@ static int is_adsp_raise_event(uint32_t cmd)
 	return -EINVAL;
 }
 
+#ifdef CONFIG_SEC_SND_ADAPTATION
+struct audio_session *q6asm_get_audio_session(void)
+{
+	return session;
+}
+#endif /* CONFIG_SEC_SND_ADAPTATION */
+
 #ifdef CONFIG_DEBUG_FS
 #define OUT_BUFFER_SIZE 56
 #define IN_BUFFER_SIZE 24
