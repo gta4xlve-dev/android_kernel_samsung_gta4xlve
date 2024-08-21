@@ -194,3 +194,5 @@ obj-$(CONFIG_GNSS)		+= gnss/
 
 obj-$(CONFIG_USE_MUIC)		+= muic/
 obj-$(CONFIG_BATTERY_SAMSUNG_LEGO_STYLE)	+= battery/
+
+obj-$(CONFIG_ADSP_FACTORY)      += adsp_factory/

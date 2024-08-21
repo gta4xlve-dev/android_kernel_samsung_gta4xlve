@@ -229,4 +229,6 @@ source "drivers/muic/Kconfig"
 
 source "drivers/battery/Kconfig"
 
+source "drivers/adsp_factory/Kconfig"
+
 endmenu
