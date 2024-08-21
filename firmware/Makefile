@@ -10,6 +10,11 @@ fwabs := $(addprefix $(srctree)/,$(filter-out /%,$(fwdir)))$(filter /%,$(fwdir))
 
 fw-external-y := $(subst $(quote),,$(CONFIG_EXTRA_FIRMWARE))
 
+fw-shipped-$(CONFIG_TOUCHSCREEN_HIMAX_IC_HX83102) += tsp_himax/hx83102e_gts6litereresh.bin
+
+fw-shipped-$(CONFIG_EPEN_WACOM_WEZ01) += epen/w9021_gts6lite.bin
+fw-shipped-$(CONFIG_EPEN_WACOM_W9019) += epen/w9019_gts6lite.bin
+
 quiet_cmd_fwbin = MK_FW   $@
       cmd_fwbin = FWNAME="$(patsubst firmware/%.gen.S,%,$@)";		     \
 		  FWSTR="$(subst /,_,$(subst .,_,$(subst -,_,$(patsubst	     \
