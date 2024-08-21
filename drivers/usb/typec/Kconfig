@@ -2,7 +2,12 @@
 menu "USB Power Delivery and Type-C drivers"
 
 config TYPEC
-	tristate
+	bool "Using USB Type-C device driver"
+	depends on ANDROID_MAJOR_VERSION != "o"
+	default n
+	help
+	  If you say yes here you will get support for
+	  the USB Type-C device driver.
 
 config TYPEC_WCOVE
 	tristate "Intel WhiskeyCove PMIC USB Type-C PHY driver"
@@ -19,6 +24,19 @@ config TYPEC_WCOVE
 	  To compile this driver as module, choose M here: the module will be
 	  called typec_wcove
 
+config USE_PDIC_LEGO
+	bool "Using PDIC LEGO"
+	default n
+	help
+	  If you say yes here you will get support for
+	  the PDIC device driver written in LEGO style.
+
 source "drivers/usb/typec/ucsi/Kconfig"
+
+source "drivers/usb/typec/manager_lego/Kconfig"
+
+source "drivers/usb/typec/common/Kconfig"
+
+source "drivers/usb/typec/sm/sm5714/Kconfig"
 
 endmenu
