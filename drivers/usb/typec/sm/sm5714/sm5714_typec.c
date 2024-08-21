@@ -3285,6 +3285,7 @@ void sm5714_manual_JIGON(struct sm5714_phydrv_data *usbpd_data, int mode)
 static int sm5714_handle_usb_external_notifier_notification(
 	struct notifier_block *nb, unsigned long action, void *data)
 {
+#ifdef CONFIG_USB_HOST_NOTIFY
 	struct sm5714_phydrv_data *usbpd_data = container_of(nb,
 		struct sm5714_phydrv_data, usb_external_notifier_nb);
 	int ret = 0;
@@ -3311,10 +3312,14 @@ static int sm5714_handle_usb_external_notifier_notification(
 	}
 
 	return ret;
+#else
+    return 0;
+#endif
 }
 
 static void sm5714_delayed_external_notifier_init(struct work_struct *work)
 {
+#ifdef CONFIG_USB_HOST_NOTIFY
 	int ret = 0;
 	static int retry_count = 1;
 	int max_retry_count = 5;
@@ -3340,6 +3345,9 @@ static void sm5714_delayed_external_notifier_init(struct work_struct *work)
 			pr_err("fail to init external notifier\n");
 	} else
 		pr_info("%s : external notifier register done!\n", __func__);
+#else
+	return;
+#endif
 }
 
 static void sm5714_usbpd_debug_reg_log(struct work_struct *work)
@@ -3604,6 +3612,7 @@ static int sm5714_usbpd_probe(struct i2c_client *i2c,
 	sm5714_pdic_irq_thread(-1, pdic_data);
 	INIT_DELAYED_WORK(&pdic_data->usb_external_notifier_register_work,
 				  sm5714_delayed_external_notifier_init);
+#ifdef CONFIG_USB_HOST_NOTIFY
 	/* Register pdic handler to pdic notifier block list */
 	ret = usb_external_notify_register(&pdic_data->usb_external_notifier_nb,
 			sm5714_handle_usb_external_notifier_notification,
@@ -3613,6 +3622,7 @@ static int sm5714_usbpd_probe(struct i2c_client *i2c,
 			msecs_to_jiffies(2000));
 	else
 		pr_info("%s : external notifier register done!\n", __func__);
+#endif
 	init_completion(&pdic_data->exit_mpsm_completion);
 	pr_info("%s : sm5714 usbpd driver uploaded!\n", __func__);
 	return 0;
