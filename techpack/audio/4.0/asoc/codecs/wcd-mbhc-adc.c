@@ -22,11 +22,18 @@
 #include "wcd-mbhc-adc.h"
 #include <asoc/wcd-mbhc-v2.h>
 #include <asoc/pdata.h>
+#if defined(CONFIG_SND_SOC_WCD_MBHC_SLOW_DET)
+#include "wcd938x/wcd938x-registers.h"
+#endif
 
 #define WCD_MBHC_ADC_HS_THRESHOLD_MV    1700
 #define WCD_MBHC_ADC_HPH_THRESHOLD_MV   75
 #define WCD_MBHC_ADC_MICBIAS_MV         1800
 #define WCD_MBHC_FAKE_INS_RETRY         4
+
+#if defined(CONFIG_SND_SOC_WCD_MBHC_SLOW_DET)
+#define MBHC_SLOW_DET_ADC_COUNT 10
+#endif
 
 static int wcd_mbhc_get_micbias(struct wcd_mbhc *mbhc)
 {
@@ -563,6 +570,16 @@ static void wcd_cancel_hs_detect_plug(struct wcd_mbhc *mbhc,
 static void wcd_mbhc_adc_detect_plug_type(struct wcd_mbhc *mbhc)
 {
 	struct snd_soc_codec *codec = mbhc->codec;
+#if defined(CONFIG_SND_SOC_WCD_MBHC_SLOW_DET)
+	/* slow: Check slow insertion with schmitt trigger */
+	bool hphl_sch_res, hphr_sch_res;
+	int hphl_adc_res = 0, hphr_adc_res = 0;
+	u8 fsm_en = 0;
+	u8 adc_mode = 0;
+	u8 elect_ctl = 0;
+	u8 adc_en = 0;
+	int try_l = 0, try_r = 0;
+#endif
 
 	pr_debug("%s: enter\n", __func__);
 	WCD_MBHC_RSC_ASSERT_LOCKED(mbhc);
@@ -579,7 +596,78 @@ static void wcd_mbhc_adc_detect_plug_type(struct wcd_mbhc *mbhc)
 		pr_err("%s: Mic Bias is not enabled\n", __func__);
 		return;
 	}
+/* slow: Check L/R ADC value of each pin */
+#if defined(CONFIG_SND_SOC_WCD_MBHC_SLOW_DET)
+	/* Read legacy electircal detection and disable */
+	WCD_MBHC_REG_READ(WCD_MBHC_ELECT_SCHMT_ISRC, elect_ctl);
+	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ELECT_SCHMT_ISRC, 0);
 
+	/* Read and set ADC to single measurement */
+	WCD_MBHC_REG_READ(WCD_MBHC_ADC_MODE, adc_mode);
+	/* Read ADC Enable bit to restore after adc measurement */
+	WCD_MBHC_REG_READ(WCD_MBHC_ADC_EN, adc_en);
+	/* Read FSM status */
+	WCD_MBHC_REG_READ(WCD_MBHC_FSM_EN, fsm_en);
+
+	/* Get adc result for HPH L */
+	do {
+		hphl_adc_res = wcd_measure_adc_once(mbhc, MUX_CTL_HPH_L);
+		if (hphl_adc_res < 0) {
+			pr_err("%s: hphl_adc_res adc measurement failed\n", __func__);
+			hphl_sch_res = true;
+		} else {
+			pr_debug("%s: hphl_adc_res adc val : %d\n", __func__, hphl_adc_res);
+			hphl_sch_res = hphl_adc_res > 50 ? true : false;
+			break;
+		}
+		try_l++;
+	} while (try_l < MBHC_SLOW_DET_ADC_COUNT);
+
+	/* Get adc result for HPH R in mV */
+	do {
+		hphr_adc_res = wcd_measure_adc_once(mbhc, MUX_CTL_HPH_R);
+		if (hphr_adc_res < 0) {
+			pr_err("%s: hphr_adc_res adc measurement failed\n", __func__);
+			hphr_sch_res = true;
+		} else {
+			pr_debug("%s: hphr_adc_res adc val : %d\n", __func__, hphr_adc_res);
+			hphr_sch_res = hphr_adc_res > 50 ? true : false;
+			break;
+		}
+		try_r++;
+	} while (try_r < MBHC_SLOW_DET_ADC_COUNT);
+
+	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 0);
+	/* Set the MUX selection to Auto */
+	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_MUX_CTL, MUX_CTL_AUTO);
+	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 1);
+
+	/* Restore ADC Enable */
+	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ADC_EN, adc_en);
+	/* Restore ADC mode */
+	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ADC_MODE, adc_mode);
+	/* Restore FSM state */
+	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, fsm_en);
+	/* Restore electrical detection */
+	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ELECT_SCHMT_ISRC, elect_ctl);
+
+	if ((hphl_sch_res || hphr_sch_res) && !mbhc->is_extn_cable) {
+		pr_debug("%s: SLOW Insertion [ %d | %d ]\n",
+			__func__, hphl_sch_res, hphr_sch_res);
+		mbhc->slow_insertion = true;
+	} else {
+		pr_debug("%s: NORMAL Insertion [ %d | %d ]\n",
+			__func__, hphl_sch_res, hphr_sch_res);
+		mbhc->slow_insertion = false;
+	}
+
+	/* enable HPH L/R GND switch */
+	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HPHL_GND, 1);
+	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HPHR_GND, 1);
+
+	/* enable MIC_CLAMP */
+	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_MIC_CLAMP_CTL, 2);
+#endif/* CONFIG_SND_SOC_WCD_MBHC_SLOW_DET */
 	/* Re-initialize button press completion object */
 	reinit_completion(&mbhc->btn_press_compl);
 	wcd_schedule_hs_detect_plug(mbhc, &mbhc->correct_plug_swch);
@@ -631,8 +719,10 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 	int ret = 0;
 	int spl_hs_count = 0;
 	int output_mv = 0;
+#ifndef CONFIG_SND_SOC_WCD_MBHC_SLOW_DET
 	int cross_conn;
 	int try = 0;
+#endif
 	int hs_threshold, micbias_mv;
 
 	pr_debug("%s: enter\n", __func__);
@@ -648,6 +738,7 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 	wcd_mbhc_hs_elec_irq(mbhc, WCD_MBHC_ELEC_HS_INS, false);
 	WCD_MBHC_RSC_UNLOCK(mbhc);
 
+#ifndef CONFIG_SND_SOC_WCD_MBHC_SLOW_DET
 	/* Check for cross connection */
 	do {
 		cross_conn = wcd_check_cross_conn(mbhc);
@@ -660,6 +751,7 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 			 __func__, plug_type);
 		goto correct_plug_type;
 	}
+#endif
 	/* Find plug type */
 	output_mv = wcd_measure_adc_continuous(mbhc);
 	plug_type = wcd_mbhc_get_plug_from_adc(mbhc, output_mv);
@@ -687,7 +779,16 @@ static void wcd_correct_swch_plug(struct work_struct *work)
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_DETECTION_DONE, 1);
 	}
 
+#ifndef CONFIG_SND_SOC_WCD_MBHC_SLOW_DET
 correct_plug_type:
+#else
+	if (!mbhc->slow_insertion &&
+		mbhc->current_plug == MBHC_PLUG_TYPE_HEADSET) {
+		pr_debug("%s: plug_type:0x%x already reported\n",
+			 __func__, mbhc->current_plug);
+		goto report;
+	}
+#endif
 	/*
 	 * Callback to disable BCS slow insertion detection
 	 */
@@ -697,7 +798,7 @@ correct_plug_type:
 			mbhc->mbhc_cb->bcs_enable(mbhc, false);
 
 	timeout = jiffies + msecs_to_jiffies(HS_DETECT_PLUG_TIME_MS);
-	while (!time_after(jiffies, timeout)) {
+	while (!time_after(jiffies, timeout) && mbhc->slow_insertion) {
 		if (mbhc->hs_detect_work_stop) {
 			pr_debug("%s: stop requested: %d\n", __func__,
 					mbhc->hs_detect_work_stop);

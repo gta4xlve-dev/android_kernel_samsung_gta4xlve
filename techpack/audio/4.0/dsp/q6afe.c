@@ -30,6 +30,10 @@ static int32_t tas_smartamp_algo_callback(uint32_t opcode, uint32_t *payload,
 					uint32_t payload_size);
 #endif /*CONFIG_TAS25XX_ALGO*/
 
+#ifdef CONFIG_SEC_SND_ADAPTATION
+#include <dsp/sec_adaptation.h>
+#endif /* CONFIG_SEC_SND_ADAPTATION */
+
 #define WAKELOCK_TIMEOUT	5000
 #define AFE_CLK_TOKEN	1024
 enum {
@@ -185,6 +189,9 @@ struct afe_ctl {
 	uint32_t tas_module_rx;
 	uint32_t tas_module_tx;
 #endif	/*CONFIG_TAS25XX_ALGO*/
+#ifdef CONFIG_SEC_SND_ADAPTATION
+	uint32_t volume_monitor_data[VOLUME_MONITOR_GET_PAYLOAD_SIZE];
+#endif
 };
 
 static atomic_t afe_ports_mad_type[SLIMBUS_PORT_LAST - SLIMBUS_0_RX];
@@ -613,6 +620,33 @@ static bool afe_token_is_valid(uint32_t token)
 	return true;
 }
 
+#ifdef CONFIG_SEC_SND_ADAPTATION
+static void volumemonitor_afe_cb_handler(uint32_t opcode, uint32_t *payload,
+					uint32_t payload_size)
+{
+	size_t expected_size =
+		sizeof(u32) + sizeof(struct afe_volume_monitor_get_params_t);
+
+	switch (opcode) {
+	case AFE_PORT_CMDRSP_GET_PARAM_V3:
+		expected_size += sizeof(struct param_hdr_v3);
+		if (payload_size < expected_size) {
+			pr_err("%s: Error: received size %d, expected size %zu\n",
+				 __func__, payload_size, expected_size);
+			return;
+		}
+		memcpy(&this_afe.volume_monitor_data, &payload[5],
+			sizeof(this_afe.volume_monitor_data));
+		break;
+	default:
+		pr_err("%s: Unrecognized command %d\n", __func__, opcode);
+		return;
+	}
+
+	atomic_set(&this_afe.state, 0);
+}
+#endif
+
 static int32_t afe_callback(struct apr_client_data *data, void *priv)
 {
 	uint16_t i = 0;
@@ -703,6 +737,11 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 		} else if (param_id == AFE_PARAM_ID_DEV_TIMING_STATS) {
 			av_dev_drift_afe_cb_handler(data->opcode, data->payload,
 						    data->payload_size);
+#ifdef CONFIG_SEC_SND_ADAPTATION
+		} else if (param_id == AFE_MODULE_PARAM_ID_GET_VOLUME_MONITOR) {
+			volumemonitor_afe_cb_handler(data->opcode, data->payload,
+						    data->payload_size);
+#endif
 		} else {
 #ifdef CONFIG_TAS25XX_ALGO
 			u32 *payload32 = data->payload;
@@ -5697,6 +5736,180 @@ fail_cmd:
 	return ret;
 }
 EXPORT_SYMBOL(afe_loopback_gain);
+
+#ifdef CONFIG_SEC_SND_ADAPTATION
+int afe_set_volume_monitor(int port_id, int enable,  int volume_level, int avc_support, int db_atten)
+{
+	int ret = 0;
+	int index;
+	struct afe_volume_monitor_set_params_t volume_monitor_set_param;
+	struct param_hdr_v3 param_hdr;
+	u8 *packed_param_data = NULL;
+	int packed_data_size = 0;
+	u8 *param_data;
+
+	memset(&param_hdr, 0, sizeof(param_hdr));
+	param_hdr.module_id = AFE_MODULE_ID_VOLUME_MONITOR;
+	param_hdr.instance_id = INSTANCE_ID_0;
+	param_hdr.param_id = AFE_MODULE_PARAM_ID_SET_VOLUME_MONITOR;
+	param_hdr.param_size = sizeof(struct afe_volume_monitor_set_params_t);
+
+	packed_data_size = sizeof(union param_hdrs) + param_hdr.param_size;
+
+	packed_param_data = kzalloc(packed_data_size, GFP_KERNEL);
+	if (!packed_param_data)
+		return -ENOMEM;
+
+	volume_monitor_set_param.payload[0] = enable;
+	volume_monitor_set_param.payload[1] = volume_level;
+	volume_monitor_set_param.payload[2] = avc_support;
+	volume_monitor_set_param.payload[3] = db_atten;
+
+	param_data = (u8 *) &volume_monitor_set_param;
+
+	ret = q6common_pack_pp_params(packed_param_data, &param_hdr, param_data, &packed_data_size);
+	if (ret) {
+		pr_err("%s: Failed to pack param header and data, error %d\n",
+			__func__, ret);
+	goto fail_cmd;
+	}
+
+	index = q6audio_get_port_index(port_id);
+
+	ret = q6afe_set_params(port_id, index, NULL, packed_param_data, packed_data_size);
+	if (ret) {
+		pr_err("%s: Comamnd %d failed %d\n",
+			__func__, AFE_MODULE_PARAM_ID_SET_VOLUME_MONITOR, ret);
+	    ret = -EINVAL;
+	}
+fail_cmd:
+	kfree(packed_param_data);
+	return ret;
+}
+EXPORT_SYMBOL(afe_set_volume_monitor);
+
+int afe_get_volume_monitor(int port_id, int *volume_monitor_value)
+{
+	struct param_hdr_v3 param_hdr;
+	int ret = 0;
+	int i;
+
+	memset(&param_hdr, 0, sizeof(param_hdr));
+
+	param_hdr.module_id = AFE_MODULE_ID_VOLUME_MONITOR;
+	param_hdr.instance_id = INSTANCE_ID_0;
+	param_hdr.param_id = AFE_MODULE_PARAM_ID_GET_VOLUME_MONITOR;
+	param_hdr.param_size = sizeof(struct afe_volume_monitor_get_params_t);
+
+	ret = q6afe_get_params(port_id, NULL, &param_hdr);
+	if (ret) {
+		pr_err("%s: Failed to get volume monitor data\n", __func__);
+		goto done;
+	}
+
+	for (i = 0; i < VOLUME_MONITOR_GET_PAYLOAD_SIZE; i++)
+		volume_monitor_value[i] = this_afe.volume_monitor_data[i];
+
+	pr_info("%s:end\n", __func__);
+done:
+	return ret;
+}
+EXPORT_SYMBOL(afe_get_volume_monitor);
+
+int afe_set_remote_mic_vol(int port_id, int volindex)
+{
+	int ret = 0;
+	int index;
+	struct afe_remote_mic_params_t remote_mic_vol_param;
+	struct param_hdr_v3 param_hdr;
+	u8 *packed_param_data = NULL;
+	int packed_data_size = 0;
+	u8 *param_data;
+
+	memset(&param_hdr, 0, sizeof(param_hdr));
+	param_hdr.module_id = AFE_MODULE_LVVEFQ_TX;
+	param_hdr.instance_id = 0x8000;
+	param_hdr.param_id = DIAMONDVOICE_REMOTEVOL_PARAM;
+	param_hdr.param_size = sizeof(struct afe_remote_mic_params_t);
+
+	packed_data_size = sizeof(union param_hdrs) + param_hdr.param_size;
+
+	packed_param_data = kzalloc(packed_data_size, GFP_KERNEL);
+	if (!packed_param_data)
+		return -ENOMEM;
+
+	remote_mic_vol_param.payload = volindex;
+
+	param_data = (u8 *) &remote_mic_vol_param;
+
+	ret = q6common_pack_pp_params(packed_param_data, &param_hdr, param_data, &packed_data_size);
+	if (ret) {
+		pr_err("%s: Failed to pack param header and data, error %d\n",
+			    __func__, ret);
+		goto fail_cmd;
+	}
+
+	index = q6audio_get_port_index(port_id);
+
+	ret = q6afe_set_params(port_id, index, NULL, packed_param_data, packed_data_size);
+	if (ret) {
+		pr_err("%s: Comamnd %d failed %d\n",
+			__func__, AFE_MODULE_LVVEFQ_TX, ret);
+		ret = -EINVAL;
+	}
+fail_cmd:
+	kfree(packed_param_data);
+	return ret;
+}
+EXPORT_SYMBOL(afe_set_remote_mic_vol);
+
+int afe_set_sa_listenback(int port_id, int enable)
+{
+	int ret = 0;
+	int index;
+	struct afe_listen_enable_params_t listenback_enable_param;
+	struct param_hdr_v3 param_hdr;
+	u8 *packed_param_data = NULL;
+	int packed_data_size = 0;
+	u8 *param_data;
+
+	memset(&param_hdr, 0, sizeof(param_hdr));
+	param_hdr.module_id = MODULE_ID_PP_LISTENBACK;
+	param_hdr.instance_id = INSTANCE_ID_0;
+	param_hdr.param_id = PARAM_ID_PP_LISTENBACK_SET_PARAMS;
+	param_hdr.param_size = sizeof(struct afe_listen_enable_params_t);
+
+	packed_data_size = sizeof(union param_hdrs) + param_hdr.param_size;
+
+	packed_param_data = kzalloc(packed_data_size, GFP_KERNEL);
+	if (!packed_param_data)
+		return -ENOMEM;
+
+	listenback_enable_param.payload = enable;
+
+	param_data = (u8 *) &listenback_enable_param;
+
+	ret = q6common_pack_pp_params(packed_param_data, &param_hdr, param_data, &packed_data_size);
+	if (ret) {
+		pr_err("%s: Failed to pack param header and data, error %d\n",
+					 __func__, ret);
+		goto fail_cmd;
+	}
+
+	index = q6audio_get_port_index(port_id);
+
+	ret = q6afe_set_params(port_id, index, NULL, packed_param_data, packed_data_size);
+	if (ret) {
+		pr_err("%s: Comamnd %d failed %d\n",
+					 __func__, PARAM_ID_PP_LISTENBACK_SET_PARAMS, ret);
+		ret = -EINVAL;
+	}
+fail_cmd:
+	kfree(packed_param_data);
+	return ret;
+}
+EXPORT_SYMBOL(afe_set_sa_listenback);
+#endif
 
 #ifdef CONFIG_TAS25XX_ALGO
 /*For DC Detection*/

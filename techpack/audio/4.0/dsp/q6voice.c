@@ -24,6 +24,10 @@
 #include "adsp_err.h"
 #include <dsp/voice_mhi.h>
 
+#ifdef CONFIG_SEC_SND_ADAPTATION
+#include <dsp/sec_adaptation.h>
+#endif /* CONFIG_SEC_SND_ADAPTATION */
+
 #define TIMEOUT_MS 300
 
 
@@ -150,6 +154,13 @@ static int voice_pack_and_set_cvp_param(struct voice_data *v,
 static int voice_pack_and_set_cvs_ui_property(struct voice_data *v,
 					      struct param_hdr_v3 param_hdr,
 					      u8 *param_data);
+
+#ifdef CONFIG_SEC_SND_ADAPTATION
+struct common_data *voice_get_common_data(void)
+{
+	return &common;
+}
+#endif /* CONFIG_SEC_SND_ADAPTATION */
 
 static void voice_itr_init(struct voice_session_itr *itr,
 			   u32 session_id)
@@ -6982,6 +6993,10 @@ int voc_end_voice_call(uint32_t session_id)
 
 		pr_debug("%s: VOC_STATE: %d\n", __func__, v->voc_state);
 
+#ifdef CONFIG_SEC_SND_ADAPTATION
+		voice_sec_loopback_end_cmd(session_id);
+#endif /* CONFIG_SEC_SND_ADAPTATION */
+
 		ret = voice_destroy_vocproc(v);
 		if (ret < 0)
 			pr_err("%s:  destroy voice failed\n", __func__);
@@ -7201,6 +7216,11 @@ int voc_enable_device(uint32_t session_id)
 			       __func__, ret);
 			goto done;
 		}
+
+#ifdef CONFIG_SEC_SND_ADAPTATION
+		voice_sec_loopback_start_cmd(session_id);
+#endif /* CONFIG_SEC_SND_ADAPTATION */
+
 		v->voc_state = VOC_RUN;
 	} else {
 		pr_debug("%s: called in voc state=%d, No_OP\n",
