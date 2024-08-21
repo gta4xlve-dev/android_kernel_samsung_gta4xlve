@@ -233,4 +233,6 @@ source "drivers/adsp_factory/Kconfig"
 
 source "drivers/samsung/Kconfig"
 
+source "drivers/switch/Kconfig"
+
 endmenu
