@@ -25,6 +25,12 @@
 #include "wcd-mbhc-legacy.h"
 #include "wcd-mbhc-adc.h"
 #include <asoc/wcd-mbhc-v2-api.h>
+#if defined(CONFIG_SND_SOC_WCD_MBHC_SLOW_DET)
+#include <asoc/pdata.h>
+#endif
+#ifdef CONFIG_SND_SOC_IMPED_SENSING
+#include "wcd938x/internal.h"
+#endif
 
 void wcd_mbhc_jack_report(struct wcd_mbhc *mbhc,
 			  struct snd_soc_jack *jack, int status, int mask)
@@ -684,8 +690,16 @@ void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_MUX_CTL,
 						 MUX_CTL_AUTO);
 			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN, 1);
+#if defined(CONFIG_SND_SOC_WCD_MBHC_SLOW_DET)
+			if (!mbhc->slow_insertion)
+				mbhc->mbhc_cb->compute_impedance(mbhc,
+						&mbhc->zl, &mbhc->zr);
+			else
+				mbhc->impedance_offset = mbhc->default_impedance_offset;
+#else
 			mbhc->mbhc_cb->compute_impedance(mbhc,
 					&mbhc->zl, &mbhc->zr);
+#endif
 			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_FSM_EN,
 						 fsm_en);
 			if ((mbhc->zl > mbhc->mbhc_cfg->linein_th) &&
@@ -1733,6 +1747,10 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 	const char *gnd_switch = "qcom,msm-mbhc-gnd-swh";
 	const char *hs_thre = "qcom,msm-mbhc-hs-mic-max-threshold-mv";
 	const char *hph_thre = "qcom,msm-mbhc-hs-mic-min-threshold-mv";
+#ifdef CONFIG_SND_SOC_IMPED_SENSING
+	struct wcd938x_priv *wcd938x = snd_soc_codec_get_drvdata(codec);
+	struct wcd938x_pdata *pdata = dev_get_platdata(wcd938x->dev);
+#endif
 
 	pr_debug("%s: enter\n", __func__);
 
@@ -1794,6 +1812,13 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 	mbhc->hph_type = WCD_MBHC_HPH_NONE;
 	mbhc->wcd_mbhc_regs = wcd_mbhc_regs;
 	mbhc->swap_thr = GND_MIC_SWAP_THRESHOLD;
+#if defined(CONFIG_SND_SOC_WCD_MBHC_SLOW_DET)
+	mbhc->slow_insertion = false;
+#endif
+#ifdef CONFIG_SND_SOC_IMPED_SENSING
+	mbhc->default_impedance_offset =
+		pdata->imp_table[SND_JACK_HEADSET].gain;
+#endif
 
 	if (mbhc->intr_ids == NULL) {
 		pr_err("%s: Interrupt mapping not provided\n", __func__);

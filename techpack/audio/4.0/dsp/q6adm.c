@@ -22,6 +22,10 @@
 #include <ipc/apr.h>
 #include "adsp_err.h"
 
+#ifdef CONFIG_SEC_SND_ADAPTATION
+#include <dsp/sec_adaptation.h>
+#endif /* CONFIG_SEC_SND_ADAPTATION */
+
 #define TIMEOUT_MS 1000
 
 #define RESET_COPP_ID 99
@@ -3059,6 +3063,18 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 		    (rate != ADM_CMD_COPP_OPEN_SAMPLE_RATE_32K))
 			rate = 16000;
 	}
+
+#ifdef CONFIG_SEC_SND_ADAPTATION
+	if ((topology == VPM_TX_SM_LVVEFQ_COPP_TOPOLOGY) ||
+		(topology == VPM_TX_DM_LVVEFQ_COPP_TOPOLOGY) ||
+		(topology == VPM_TX_SM_LVSAFQ_COPP_TOPOLOGY) ||
+		(topology == VPM_TX_DM_LVSAFQ_COPP_TOPOLOGY) ||
+		(topology == VOICE_TX_DIAMONDVOICE_FVSAM_SM) ||
+		(topology == VOICE_TX_DIAMONDVOICE_FVSAM_DM) ||
+		(topology == VOICE_TX_DIAMONDVOICE_FVSAM_QM) ||
+		(topology == VOICE_TX_DIAMONDVOICE_FRSAM_DM))
+		rate = 16000;
+#endif /* CONFIG_SEC_SND_ADAPTATION */
 
 	if (topology == FFECNS_TOPOLOGY) {
 		this_adm.ffecns_port_id = port_id;

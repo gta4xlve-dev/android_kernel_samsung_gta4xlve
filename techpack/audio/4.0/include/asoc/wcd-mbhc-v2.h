@@ -593,6 +593,14 @@ struct wcd_mbhc {
 	bool force_linein;
 	struct device_node *fsa_np;
 	struct notifier_block fsa_nb;
+
+#if defined(CONFIG_SND_SOC_WCD_MBHC_SLOW_DET)
+	bool slow_insertion;
+#endif
+#ifdef CONFIG_SND_SOC_IMPED_SENSING
+	int default_impedance_offset;
+	int impedance_offset;
+#endif
 };
 
 void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
