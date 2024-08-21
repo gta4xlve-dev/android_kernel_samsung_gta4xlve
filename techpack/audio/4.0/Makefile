@@ -1,6 +1,17 @@
 ifeq ($(CONFIG_ARCH_ATOLL), y)
+ifeq ($(CONFIG_SEC_GTA4XLVE_PROJECT),y)
+include $(srctree)/techpack/audio/4.0/config/sm7125_gta4xlve.conf
+export $(shell sed 's/=.*//' $(srctree)/techpack/audio/4.0/config/sm7125_gta4xlve.conf)
+
+LINUXINCLUDE    += \
+                -include $(srctree)/techpack/audio/4.0/config/sm7125_gta4xlve.h
+else
 include $(srctree)/techpack/audio/4.0/config/atollauto.conf
 export $(shell sed 's/=.*//' $(srctree)/techpack/audio/4.0/config/atollauto.conf)
+
+LINUXINCLUDE    += \
+                -include $(srctree)/techpack/audio/4.0/config/atollautoconf.h
+endif
 
 # Use USERINCLUDE when you must reference the UAPI directories only.
 USERINCLUDE     += \
@@ -11,9 +22,6 @@ USERINCLUDE     += \
 LINUXINCLUDE    += \
                 -I$(srctree)/techpack/audio/4.0/include/uapi \
                 -I$(srctree)/techpack/audio/4.0/include
-
-LINUXINCLUDE    += \
-                -include $(srctree)/techpack/audio/4.0/config/atollautoconf.h
 endif
 
 obj-y += soc/
