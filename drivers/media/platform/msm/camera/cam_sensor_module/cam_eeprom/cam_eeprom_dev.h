@@ -185,6 +185,23 @@ struct cam_eeprom_ctrl_t {
 	struct cam_eeprom_memory_block_t cal_data;
 };
 
+typedef enum{
+	CAM_EEPROM_IDX_WIDE,
+	CAM_EEPROM_IDX_FRONT,
+	CAM_EEPROM_IDX_ULTRA_WIDE,
+	CAM_EEPROM_IDX_BOKEH,
+#if defined(CONFIG_SAMSUNG_REAR_QUAD) || defined(CONFIG_SEC_R5Q_PROJECT)
+	CAM_EEPROM_IDX_BACK_MACRO,
+#endif
+#if defined(CONFIG_SAMSUNG_REAR_TOF)
+	CAM_EEPROM_IDX_BACK_TOF,
+#endif
+#if defined(CONFIG_SAMSUNG_FRONT_TOF)
+	CAM_EEPROM_IDX_FRONT_TOF,
+#endif
+	CAM_EEPROM_IDX_MAX
+} cam_eeprom_idx_type;
+
 int32_t cam_eeprom_update_i2c_info(struct cam_eeprom_ctrl_t *e_ctrl,
 	struct cam_eeprom_i2c_info_t *i2c_info);
 
