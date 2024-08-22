@@ -234,6 +234,23 @@ static struct class *class;
 static dev_t device;
 static bool hdd_loaded = false;
 
+static struct kobject *boot_wlan_kobj;
+static struct attribute_group *wlan_attr_group;
+
+static struct kobj_attribute wlan_boot_attribute =
+	__ATTR(boot_wlan, 0220, NULL, NULL);
+
+static struct attribute *wlan_sysfs_attrs[] = {
+	&wlan_boot_attribute.attr,
+	NULL,
+};
+
+#ifdef MULTI_IF_NAME
+#define WLAN_LOADER_NAME "boot_" MULTI_IF_NAME
+#else
+#define WLAN_LOADER_NAME "boot_wlan"
+#endif
+
 /* the Android framework expects this param even though we don't use it */
 #define BUF_LEN 20
 static char fwpath_buffer[BUF_LEN];
@@ -16661,6 +16678,67 @@ static void hdd_driver_unload(void)
 }
 
 /**
+ * hdd_sysfs_cleanup() - cleanup sysfs
+ *
+ * Return: None
+ *
+ */
+static void hdd_sysfs_cleanup(void)
+{
+	if (boot_wlan_kobj &&wlan_attr_group)
+		sysfs_remove_group(boot_wlan_kobj, wlan_attr_group);
+
+	kobject_del(boot_wlan_kobj);
+	kobject_put(boot_wlan_kobj);
+
+	kfree(wlan_attr_group);
+
+    boot_wlan_kobj = NULL;
+    wlan_attr_group = NULL;
+}
+
+/**
+ * wlan_init_sysfs() - Creates the sysfs to be invoked when the fs is
+ * ready
+ *
+ * This is creates the syfs entry boot_wlan. Which shall be invoked
+ * when the filesystem is ready.
+ *
+ * QDF API cannot be used here since this function is called even before
+ * initializing WLAN driver.
+ *
+ * Return: 0 for success, errno on failure
+ */
+static int wlan_init_sysfs(void)
+{
+	int ret = -ENOMEM;
+
+	wlan_attr_group = kzalloc(sizeof(*(wlan_attr_group)), GFP_KERNEL);
+	if (!wlan_attr_group)
+		goto error_return;
+
+	wlan_attr_group->attrs = wlan_sysfs_attrs;
+	boot_wlan_kobj = kobject_create_and_add(WLAN_LOADER_NAME, kernel_kobj);
+	if (!boot_wlan_kobj) {
+		hdd_err("sysfs create and add failed");
+		goto error_return;
+	}
+
+	ret = sysfs_create_group(boot_wlan_kobj, wlan_attr_group);
+	if (ret) {
+		hdd_err("sysfs create group failed; errno:%d", ret);
+		goto error_return;
+	}
+
+	return 0;
+
+error_return:
+	hdd_sysfs_cleanup();
+
+	return ret;
+}
+
+/**
  * hdd_module_init() - Module init helper
  *
  * Module init helper function used by both module and static driver.
@@ -16672,10 +16750,18 @@ static int hdd_module_init(void)
 	int ret;
 
 	ret = wlan_hdd_state_ctrl_param_create();
-	if (ret)
+	if (ret) {
 		pr_err("wlan_hdd_state_create:%x\n", ret);
+		return ret;
+	}
 
-	return ret;
+	ret = wlan_init_sysfs();
+	if (ret) {
+		pr_err("wlan_init_sysfs:%x\n", ret);
+		return ret;
+	}
+
+	return 0;
 }
 
 /**
