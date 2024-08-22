@@ -11,7 +11,6 @@
  */
 
 #include "../../../../../../drivers/gpu/drm/msm/samsung_lego/HX83102_TV104WUM/dsi_panel_HX83102_TV104WUM_wuxga_video.dtsi"
-#include "../../../../../../drivers/gpu/drm/msm/samsung_lego/PBA_BOOTING/dsi_panel_PBA_BOOTING_fhd_video.dtsi"
 
 #define DEFAULT_FIXED_VAL	0
 
@@ -101,13 +100,6 @@
 		qcom,display-type = "primary";
 
 	};
-
-	/* PBA */
-	ss_dsi_panel_PBA_BOOTING_FHD_display: qcom,dsi-display@10 {
-		label = "ss_dsi_panel_PBA_BOOTING_FHD";
-		qcom,display-type = "primary";
-
-	};
 };
 
 &sde_dsi {
@@ -119,8 +111,7 @@
 	pinctrl-0 = <&sde_dsi_active &sde_ub_det_default>;
 	pinctrl-1 = <&sde_dsi_suspend &sde_ub_det_default>;
 	qcom,dsi-display-list =
-		<&ss_dsi_panel_HX83102_TV104WUM_WUXGA
-		&ss_dsi_panel_PBA_BOOTING_FHD>;
+		<&ss_dsi_panel_HX83102_TV104WUM_WUXGA>;
 };
 
 &ss_dsi_panel_HX83102_TV104WUM_WUXGA {
@@ -180,17 +171,6 @@
 			qcom,supply-pre-off-sleep = <0>;
 		};
 	};
-};
-
-&ss_dsi_panel_PBA_BOOTING_FHD {
-	qcom,display-type = "primary";
-	qcom,dsi-display-active;
-
-	qcom,dsi-ctrl-num = <0>;
-	qcom,dsi-phy-num = <0>;
-	qcom,dsi-select-clocks = "mux_byte_clk0", "mux_pixel_clk0";
-
-	qcom,dsi-panel = <&ss_dsi_panel_PBA_BOOTING_FHD>;
 };
 
 &cont_splash_memory {
