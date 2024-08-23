@@ -1184,4 +1184,7 @@ config SND_SOC_TFA98XX
 	help
 	Enables support for NXP98xx Smart PA.
 
+# DBMDx
+source "sound/soc/codecs/dbmdx/Kconfig"
+
 endmenu
