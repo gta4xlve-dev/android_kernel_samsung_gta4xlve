@@ -51,6 +51,44 @@
 #define SCM_DLOAD_MINIDUMP		0X20
 #define SCM_DLOAD_BOTHDUMPS	(SCM_DLOAD_MINIDUMP | SCM_DLOAD_FULLDUMP)
 
+#define PON_RESTART_REASON_NOT_HANDLE	PON_RESTART_REASON_MAX
+#define RESTART_REASON_NOT_HANDLE	RESTART_REASON_END
+
+#define KERNEL_SEC_DEBUG_LEVEL_LOW	(0x574F4C44)
+#define KERNEL_SEC_DEBUG_LEVEL_MID	(0x44494D44)
+#define KERNEL_SEC_DEBUG_LEVEL_HIGH	(0x47494844)
+
+#define ANDROID_DEBUG_LEVEL_LOW		0x4f4c
+#define ANDROID_DEBUG_LEVEL_MID		0x494d
+#define ANDROID_DEBUG_LEVEL_HIGH	0x4948
+
+#define ANDROID_CP_DEBUG_ON		0x5500
+#define ANDROID_CP_DEBUG_OFF		0x55ff
+
+#define DUMP_SINK_TO_SDCARD 0x73646364
+#define DUMP_SINK_TO_BOOTDEV 0x42544456
+#define DUMP_SINK_TO_USB 0x0
+
+#define CDSP_SIGNOFF_BLOCK 0x2377
+#define CDSP_SIGNOFF_ON 0x7277
+
+enum sec_restart_reason_t {
+	RESTART_REASON_NORMAL = 0x0,
+	RESTART_REASON_BOOTLOADER = 0x77665500,
+	RESTART_REASON_REBOOT = 0x77665501,
+	RESTART_REASON_RECOVERY = 0x77665502,
+	RESTART_REASON_RTC = 0x77665503,
+	RESTART_REASON_DMVERITY_CORRUPTED = 0x77665508,
+	RESTART_REASON_DMVERITY_ENFORCE = 0x77665509,
+	RESTART_REASON_KEYS_CLEAR = 0x7766550a,
+	RESTART_REASON_SEC_DEBUG_MODE = 0x776655ee,
+	RESTART_REASON_RECOVERY_UPDATE = 0x776655cc,
+	RESTART_REASON_END = 0xffffffff,
+};
+
+static enum sec_restart_reason_t __iomem *qcom_restart_reason;
+void (*sec_nvmem_pon_write)(u8 pon_rr) = NULL;
+
 static int restart_mode;
 static void *restart_reason;
 static bool scm_pmic_arbiter_disable_supported;
@@ -285,6 +323,267 @@ static void halt_spmi_pmic_arbiter(void)
 	}
 }
 
+static inline void __sec_debug_set_restart_reason(
+				enum sec_restart_reason_t __r)
+{
+	__raw_writel((u32)__r, qcom_restart_reason);
+}
+
+static enum pon_restart_reason __pon_restart_rory_start(
+				unsigned long opt_code)
+{
+	return (PON_RESTART_REASON_RORY_START | opt_code);
+}
+
+static enum pon_restart_reason __pon_restart_set_debug_level(
+				unsigned long opt_code)
+{
+	switch (opt_code) {
+	case ANDROID_DEBUG_LEVEL_LOW:
+		return PON_RESTART_REASON_DBG_LOW;
+	case ANDROID_DEBUG_LEVEL_MID:
+		return PON_RESTART_REASON_DBG_MID;
+	case ANDROID_DEBUG_LEVEL_HIGH:
+		return PON_RESTART_REASON_DBG_HIGH;
+	}
+
+	return PON_RESTART_REASON_UNKNOWN;
+}
+
+static enum pon_restart_reason __pon_restart_set_cpdebug(
+				unsigned long opt_code)
+{
+	if (opt_code == ANDROID_CP_DEBUG_ON)
+		return PON_RESTART_REASON_CP_DBG_ON;
+	else if (opt_code == ANDROID_CP_DEBUG_OFF)
+		return PON_RESTART_REASON_CP_DBG_OFF;
+
+	return PON_RESTART_REASON_UNKNOWN;
+}
+
+static enum pon_restart_reason __pon_restart_force_upload(
+				unsigned long opt_code)
+{
+	return (opt_code) ?
+		PON_RESTART_REASON_FORCE_UPLOAD_ON :
+		PON_RESTART_REASON_FORCE_UPLOAD_OFF;
+}
+
+static enum pon_restart_reason __pon_restart_dump_sink(
+				unsigned long opt_code)
+{
+	switch (opt_code) {
+	case DUMP_SINK_TO_BOOTDEV:
+		return PON_RESTART_REASON_DUMP_SINK_BOOTDEV;
+	case DUMP_SINK_TO_SDCARD:
+		return PON_RESTART_REASON_DUMP_SINK_SDCARD;
+	default:
+		return PON_RESTART_REASON_DUMP_SINK_USB;
+	}
+
+	return PON_RESTART_REASON_UNKNOWN;
+}
+
+static enum pon_restart_reason __pon_restart_cdsp_signoff(
+				unsigned long opt_code)
+{
+	switch (opt_code) {
+	case CDSP_SIGNOFF_ON:
+		return PON_RESTART_REASON_CDSP_ON;
+	case CDSP_SIGNOFF_BLOCK:
+		return PON_RESTART_REASON_CDSP_BLOCK;
+	}
+
+	return PON_RESTART_REASON_UNKNOWN;
+}
+
+static bool sec_check_leave_reboot_reason(enum pon_restart_reason pon_rr)
+{
+	bool result = false;
+
+	result = (pon_rr == PON_RESTART_REASON_MULTICMD) || result;
+	result = (pon_rr == PON_RESTART_REASON_LIMITED_DRAM_SETTING) || result;
+
+	return result;
+}
+
+void sec_debug_update_restart_reason(const char *cmd, const int in_panic,
+		const int restart_mode)
+{
+	struct __magic {
+		const char *cmd;
+		enum pon_restart_reason pon_rr;
+		enum sec_restart_reason_t sec_rr;
+		enum pon_restart_reason (*func)(unsigned long opt_code);
+	} magic[] = {
+		{ "sec_debug_hw_reset",
+			PON_RESTART_REASON_NOT_HANDLE,
+			RESTART_REASON_SEC_DEBUG_MODE, NULL},
+		{ "download",
+			PON_RESTART_REASON_DOWNLOAD,
+			RESTART_REASON_NOT_HANDLE, NULL},
+		{ "nvbackup",
+			PON_RESTART_REASON_NVBACKUP,
+			RESTART_REASON_NOT_HANDLE, NULL},
+		{ "nvrestore",
+			PON_RESTART_REASON_NVRESTORE,
+			RESTART_REASON_NOT_HANDLE, NULL},
+		{ "nverase",
+			PON_RESTART_REASON_NVERASE,
+			RESTART_REASON_NOT_HANDLE, NULL},
+		{ "nvrecovery",
+			PON_RESTART_REASON_NVRECOVERY,
+			RESTART_REASON_NOT_HANDLE, NULL},
+		{ "cpmem_on",
+			PON_RESTART_REASON_CP_MEM_RESERVE_ON,
+			RESTART_REASON_NOT_HANDLE, NULL},
+		{ "cpmem_off",
+			PON_RESTART_REASON_CP_MEM_RESERVE_OFF,
+			RESTART_REASON_NOT_HANDLE, NULL},
+		{ "mbsmem_on",
+			PON_RESTART_REASON_MBS_MEM_RESERVE_ON,
+			RESTART_REASON_NOT_HANDLE, NULL},
+		{ "mbsmem_off",
+			PON_RESTART_REASON_MBS_MEM_RESERVE_OFF,
+			RESTART_REASON_NOT_HANDLE, NULL},
+		{ "GlobalActions restart",
+			PON_RESTART_REASON_NORMALBOOT,
+			RESTART_REASON_NOT_HANDLE, NULL},
+		{ "userrequested",
+			PON_RESTART_REASON_NORMALBOOT,
+			RESTART_REASON_NOT_HANDLE, NULL},
+		{ "silent.sec",
+			PON_RESTART_REASON_NORMALBOOT,
+			RESTART_REASON_NOT_HANDLE, NULL },
+		{ "oem-",
+			PON_RESTART_REASON_UNKNOWN,
+			RESTART_REASON_NORMAL, NULL},
+		{ "sud",
+			PON_RESTART_REASON_UNKNOWN,
+			RESTART_REASON_NORMAL, __pon_restart_rory_start},
+		{ "debug",
+			PON_RESTART_REASON_UNKNOWN,
+			RESTART_REASON_NORMAL, __pon_restart_set_debug_level},
+		{ "cpdebug",
+			PON_RESTART_REASON_UNKNOWN,
+			RESTART_REASON_NORMAL, __pon_restart_set_cpdebug},
+		{ "forceupload",
+			PON_RESTART_REASON_UNKNOWN,
+			RESTART_REASON_NORMAL, __pon_restart_force_upload},
+		{ "dump_sink",
+			PON_RESTART_REASON_UNKNOWN,
+			RESTART_REASON_NORMAL, __pon_restart_dump_sink},
+		{ "signoff",
+			PON_RESTART_REASON_UNKNOWN,
+			RESTART_REASON_NORMAL, __pon_restart_cdsp_signoff},
+		{ "cross_fail",
+			PON_RESTART_REASON_CROSS_FAIL,
+			RESTART_REASON_NORMAL, NULL},
+		{ "from_fastboot",
+			PON_RESTART_REASON_NORMALBOOT,
+			RESTART_REASON_NOT_HANDLE, NULL},
+		{ "disallow,fastboot",
+			PON_RESTART_REASON_NORMALBOOT,
+			RESTART_REASON_NOT_HANDLE, NULL},
+#ifdef CONFIG_MUIC_SUPPORT_RUSTPROOF
+		{ "swsel",
+			PON_RESTART_REASON_UNKNOWN,
+			RESTART_REASON_NORMAL, __pon_restart_swsel},
+#endif
+#ifdef CONFIG_SEC_PERIPHERAL_SECURE_CHK
+		{ "peripheral_hw_reset",
+			PON_RESTART_REASON_SECURE_CHECK_FAIL,
+			RESTART_REASON_NORMAL, NULL},
+#endif
+#ifdef CONFIG_SEC_QUEST_UEFI_USER
+		{ "user_quefi_quest",
+			PON_RESTART_REASON_QUEST_QUEFI_USER_START,
+			RESTART_REASON_NORMAL, NULL},
+		{ "user_suefi_quest",
+			PON_RESTART_REASON_QUEST_SUEFI_USER_START,
+			RESTART_REASON_NORMAL, NULL},
+#endif
+#ifdef CONFIG_SEC_QUEST_DDR_SCAN_USER
+		{ "user_dram_test",
+			PON_RESTART_REASON_USER_DRAM_TEST,
+			RESTART_REASON_NORMAL, NULL},
+#endif
+		{ "multicmd",
+			PON_RESTART_REASON_MULTICMD,
+			RESTART_REASON_NORMAL, NULL},
+		{ "dram",
+			PON_RESTART_REASON_LIMITED_DRAM_SETTING,
+			RESTART_REASON_NORMAL, NULL}
+	};
+	enum pon_restart_reason pon_rr = PON_RESTART_REASON_UNKNOWN;
+	enum sec_restart_reason_t sec_rr = RESTART_REASON_NORMAL;
+	char cmd_buf[256];
+	size_t i;
+
+	if (!in_panic && restart_mode != RESTART_DLOAD)
+		pon_rr = PON_RESTART_REASON_NORMALBOOT;
+
+#ifndef CONFIG_SEC_LOG_STORE_LAST_KMSG
+__next_cmd:
+#endif
+	if (!cmd)
+		pr_err("(%s) reboot cmd : NULL\n", __func__);
+	else if (!strlen(cmd))
+		pr_err("(%s) reboot cmd : Zero Length\n", __func__);
+	else {
+		strlcpy(cmd_buf, cmd, ARRAY_SIZE(cmd_buf));
+		pr_err("(%s) reboot cmd : %s\n", __func__, cmd_buf);
+	}
+
+	if (!cmd || !strlen(cmd) || !strncmp(cmd, "adb", 3))
+		goto __done;
+
+	for (i = 0; i < ARRAY_SIZE(magic); i++) {
+		size_t len = strlen(magic[i].cmd);
+
+		if (strncmp(cmd, magic[i].cmd, len))
+			continue;
+
+#ifndef CONFIG_SEC_LOG_STORE_LAST_KMSG
+		if (sec_check_leave_reboot_reason(magic[i].pon_rr)) {
+			cmd = cmd + len + 1;
+			goto __next_cmd;
+		}
+#endif
+		pon_rr = magic[i].pon_rr;
+		sec_rr = magic[i].sec_rr;
+
+		if (magic[i].func != NULL) {
+			unsigned long opt_code;
+			char *ptr = strstr(cmd_buf, ":");
+
+			if (ptr != NULL)
+				*ptr = '\0';
+
+			if (!kstrtoul(cmd_buf + len, 0, &opt_code))
+				pon_rr = magic[i].func(opt_code);
+		}
+
+		goto __done;
+	}
+
+	__sec_debug_set_restart_reason(RESTART_REASON_REBOOT);
+
+	return;
+
+__done:
+	if (pon_rr != PON_RESTART_REASON_NOT_HANDLE) {
+		if (sec_nvmem_pon_write)
+			sec_nvmem_pon_write(pon_rr);
+		else
+			qpnp_pon_set_restart_reason(pon_rr);
+	}
+	if (sec_rr != RESTART_REASON_NOT_HANDLE)
+		__sec_debug_set_restart_reason(sec_rr);
+	pr_err("(%s) restart_reason = 0x%x(0x%x)\n",
+	       __func__, sec_rr, pon_rr);
+}
+
 static void msm_restart_prepare(const char *cmd)
 {
 	bool need_warm_reset = false;
@@ -358,6 +657,7 @@ static void msm_restart_prepare(const char *cmd)
 		}
 	}
 
+	sec_debug_update_restart_reason(cmd, in_panic, restart_mode);
 	flush_cache_all();
 
 	/*outer_flush_all is not supported by 64bit kernel*/
@@ -702,6 +1002,12 @@ skip_sysfs_create:
 
 	force_warm_reboot = of_property_read_bool(dev->of_node,
 						"qcom,force-warm-reboot");
+
+	qcom_restart_reason = of_iomap(np, 0);
+	if (unlikely(!qcom_restart_reason)) {
+		pr_err("unable to map imem restart reason offset\n");
+		return -ENODEV;
+	}
 
 	return 0;
 
