@@ -4899,18 +4899,12 @@ static void aot_enable(void *dev_data)
 	case 0:
 		sec->cmd_state = SEC_CMD_STATUS_OK;
 		I("%s: Unset AOT Mode\n", __func__);
-		ts->gesture_cust_en[0] = 0;
-		ts->SMWP_enable = 0;
-		ts->aot_enabled = 0;
-		g_core_fp.fp_set_SMWP_enable(ts->SMWP_enable, ts->suspended);
+		ts->aot_enabled_suspend = 0;
 		break;
 	case 1:
 		sec->cmd_state = SEC_CMD_STATUS_OK;
 		I("%s: Set AOT Mode\n", __func__);
-		ts->gesture_cust_en[0] = 1;
-		ts->SMWP_enable = 1;
-		ts->aot_enabled = 1;
-		g_core_fp.fp_set_SMWP_enable(ts->SMWP_enable, ts->suspended);
+		ts->aot_enabled_suspend = 1;
 		break;
 	default:
 		sec->cmd_state = SEC_CMD_STATUS_FAIL;

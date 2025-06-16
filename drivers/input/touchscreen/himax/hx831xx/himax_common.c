@@ -3393,6 +3393,16 @@ error:
 	return ret;
 }
 
+static void himax_chip_common_set_aot_enabled(struct himax_ts_data *ts, bool enabled)
+{
+	I("%s: Configuring AOT (enabled: %d)\n", __func__, enabled);
+
+	ts->SMWP_enable = !!enabled;
+	ts->aot_enabled = !!enabled;
+	ts->gesture_cust_en[0] = !!enabled;
+	g_core_fp.fp_set_SMWP_enable(ts->SMWP_enable, ts->suspended);
+}
+
 int himax_chip_common_suspend(struct himax_ts_data *ts)
 {
 	mutex_lock(&ts->device_lock);
@@ -3404,6 +3414,7 @@ int himax_chip_common_suspend(struct himax_ts_data *ts)
 		I("%s: Already suspended. Skipped.\n", __func__);
 		goto END;
 	} else {
+		himax_chip_common_set_aot_enabled(ts, ts->aot_enabled_suspend);
 		ts->suspended = true;
 		I("%s: enter\n", __func__);
 	}
@@ -3508,6 +3519,7 @@ int himax_chip_common_resume(struct himax_ts_data *ts)
 		I("%s: It had entered resume, skip this step\n", __func__);
 		goto END;
 	} else {
+		himax_chip_common_set_aot_enabled(ts, false);
 		ts->suspended = false;
 	}
 

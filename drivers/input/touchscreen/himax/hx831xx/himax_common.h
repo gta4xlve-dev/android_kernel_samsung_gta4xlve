@@ -417,6 +417,7 @@ struct himax_ts_data {
 
 	uint8_t glove_enabled;
 	bool aot_enabled;
+	bool aot_enabled_suspend;
 	int prox_power_off;
 	bool cover_closed;
 
