@@ -3393,7 +3393,7 @@ error:
 	return ret;
 }
 
-static void himax_chip_common_set_aot_enabled(struct himax_ts_data *ts, bool enabled)
+static void himax_chip_common_set_aot_enabled(struct himax_ts_data *ts, bool enabled, bool suspending)
 {
 	I("%s: Configuring AOT (enabled: %d)\n", __func__, enabled);
 
@@ -3401,6 +3401,9 @@ static void himax_chip_common_set_aot_enabled(struct himax_ts_data *ts, bool ena
 	ts->aot_enabled = !!enabled;
 	ts->gesture_cust_en[0] = !!enabled;
 	g_core_fp.fp_set_SMWP_enable(ts->SMWP_enable, ts->suspended);
+
+	himax_ctrl_lcd_regulators(ts, suspending);
+	himax_ctrl_lcd_reset_regulator(ts, suspending);
 }
 
 int himax_chip_common_suspend(struct himax_ts_data *ts)
@@ -3414,7 +3417,7 @@ int himax_chip_common_suspend(struct himax_ts_data *ts)
 		I("%s: Already suspended. Skipped.\n", __func__);
 		goto END;
 	} else {
-		himax_chip_common_set_aot_enabled(ts, ts->aot_enabled_suspend);
+		himax_chip_common_set_aot_enabled(ts, ts->aot_enabled_suspend, true);
 		ts->suspended = true;
 		I("%s: enter\n", __func__);
 	}
@@ -3444,9 +3447,6 @@ int himax_chip_common_suspend(struct himax_ts_data *ts)
 #endif
 
 		atomic_set(&ts->suspend_mode, HIMAX_STATE_LPM);
-
-		himax_ctrl_lcd_regulators(ts, true);
-		himax_ctrl_lcd_reset_regulator(ts, true);
 
 		ts->pre_finger_mask = 0;
 		FAKE_POWER_KEY_SEND = false;
@@ -3519,7 +3519,7 @@ int himax_chip_common_resume(struct himax_ts_data *ts)
 		I("%s: It had entered resume, skip this step\n", __func__);
 		goto END;
 	} else {
-		himax_chip_common_set_aot_enabled(ts, false);
+		himax_chip_common_set_aot_enabled(ts, false, false);
 		ts->suspended = false;
 	}
 
