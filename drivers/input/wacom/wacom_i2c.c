@@ -1616,6 +1616,9 @@ static void wacom_i2c_set_input_values(struct wacom_i2c *wac_i2c,
 		input_set_abs_params(input_dev, ABS_Y, 0, pdata->max_y, 4, 0);
 	}
 
+	input_abs_set_res(input_dev, ABS_X, 200);
+	input_abs_set_res(input_dev, ABS_Y, 200);
+
 	input_set_capability(input_dev, EV_KEY, BTN_TOOL_PEN);
 	input_set_capability(input_dev, EV_KEY, BTN_TOOL_RUBBER);
 	input_set_capability(input_dev, EV_KEY, BTN_TOUCH);
